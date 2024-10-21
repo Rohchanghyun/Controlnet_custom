@@ -1,0 +1,6 @@
+
+scipy
+numpy
+scikit_learn
+matplotlib
+transformers
