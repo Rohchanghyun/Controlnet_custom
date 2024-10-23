@@ -42,9 +42,9 @@ class Data():
         query_dir = os.path.join(opt.data_path, 'query')
 
         # 캡션 파일 경로 설정
-        train_caption_file = os.path.join(opt.data_path, 'captions', 'train_limit_caption.json')
-        query_caption_file = os.path.join(opt.data_path, 'captions', 'query_caption.json')
-        test_caption_file = os.path.join(opt.data_path, 'captions', 'test_caption.json')
+        train_caption_file = os.path.join(opt.data_path, 'captions', 'train_captions.json')
+        query_caption_file = os.path.join(opt.data_path, 'captions', 'query_captions.json')
+        test_caption_file = os.path.join(opt.data_path, 'captions', 'test_captions.json')
 
         # Train IDs 가져오기
         train_ids = [

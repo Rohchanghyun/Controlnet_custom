@@ -19,17 +19,13 @@ def load_llava_model():
 
 
 def generate_caption(image_path, model, processor, device):
-    # 이미지를 로드하고, 흑백 이미지가 있을 경우 RGB로 강제 변환
     image = Image.open(image_path)
     if image.mode != 'RGB':
         image = image.convert("RGB")  # 이미지를 강제로 RGB로 변환
-
-    inputs = processor(image, return_tensors="pt").to(device)
-
-    # 모델을 통해 caption 생성
-    out = model.generate(**inputs)
+    prompt = "Describe the character's features and actions"
+    inputs = processor(image, text=prompt, return_tensors="pt").to(device)
+    out = model.generate(**inputs, max_length=20)
     caption = processor.decode(out[0], skip_special_tokens=True)
-    
     return caption
 
 # 이미지 경로들을 모아주고 caption 생성
@@ -76,14 +72,14 @@ def create_caption_json_for_split(split_path, split_name, output_dir):
 # 사용 예시
 def create_caption_jsons(root_dir, output_dir):
     # train, test, query, train_limit 각각에 대해 처리
-    for split in ['train']:
+    for split in ['train','query','test']:
         split_path = os.path.join(root_dir, split)
         print(split_path)
         if os.path.exists(split_path):
             create_caption_json_for_split(split_path, split, output_dir)
 
 # 실행
-root_dir = "/workspace/mnt/sda/changhyun/dataset/top15character/"  # top15character 폴더 경로
-output_dir = "/workspace/mnt/sda/changhyun/dataset/top15character/captions"  # 저장할 폴더
+root_dir = "/workspace/data/changhyun/dataset/emoji_data/"  # top15character 폴더 경로
+output_dir = "/workspace/data/changhyun/dataset/emoji_data/captions/"  # 저장할 폴더
 os.makedirs(output_dir, exist_ok=True)  # output 폴더 생성
 create_caption_jsons(root_dir, output_dir)

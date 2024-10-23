@@ -4,3 +4,4 @@ numpy
 scikit_learn
 matplotlib
 transformers
+wandb

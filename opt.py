@@ -46,4 +46,8 @@ parser.add_argument("--batchtest",
                     default=8,
                     help='the batch size for test')
 
+parser.add_argument("--optimizer",
+                    default='adamw',
+                    help='optimizer')
+
 opt = parser.parse_args()
