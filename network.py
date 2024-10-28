@@ -136,7 +136,7 @@ class MGN(nn.Module):
     
 class Image_adapter(nn.Module):
     """project image embedding to CLIP embedding space"""
-    def __init__(self, extractor_dim=2048, clip_embeddings_dim=512, hidden_dim = 1024):
+    def __init__(self, extractor_dim=2048, hidden_dim=1024, clip_embeddings_dim=512):
         super(Image_adapter, self).__init__()
         
         self.proj = torch.nn.Sequential(
@@ -146,6 +146,18 @@ class Image_adapter(nn.Module):
             torch.nn.LayerNorm(clip_embeddings_dim)
         )
         
+    #     self._init_weights()
+
+    # def _init_weights(self):
+    #     for m in self.proj:
+    #         if isinstance(m, nn.Linear):
+    #             nn.init.constant_(m.weight, 0)
+    #             if m.bias is not None:
+    #                 nn.init.constant_(m.bias, 0)
+    #         elif isinstance(m, nn.LayerNorm):
+    #             nn.init.constant_(m.bias, 0)
+    #             nn.init.constant_(m.weight, 0)
+
     def forward(self, image_embeds):
         projection_embedding = self.proj(image_embeds)
         return projection_embedding 

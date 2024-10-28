@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, cosine, euclidean
 from tqdm import tqdm
 import matplotlib
 from PIL import Image
@@ -33,12 +33,12 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 class Main():
     def __init__(self, extractor, image_adapter):
-        data = Data()
-        self.train_loader = data.train_loader
-        self.test_loader = data.test_loader
-        self.query_loader = data.query_loader
-        self.testset = data.testset
-        self.queryset = data.queryset
+        self.data = Data()
+        self.train_loader = self.data.train_loader
+        self.test_loader = self.data.test_loader
+        self.query_loader = self.data.query_loader
+        self.testset = self.data.testset
+        self.queryset = self.data.queryset
 
         self.image_adapter = image_adapter
         self.extractor = extractor
@@ -49,24 +49,22 @@ class Main():
         self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
         # load pretrained weight
-        if hasattr(opt, 'weight') and opt.weight:
-            print(f"Loading pretrained weights from {opt.weight}")
-            self.extractor.load_state_dict(torch.load(opt.weight))
+        if hasattr(opt, 'extractor_weight') and opt.extractor_weight:
+            print(f"Loading pretrained weights from {opt.extractor_weight}")
+            self.extractor.load_state_dict(torch.load(opt.extractor_weight))
+            
+        if hasattr(opt, 'image_adapter_weight') and opt.image_adapter_weight:
+            print(f"Loading pretrained weights from {opt.image_adapter_weight}")
+            self.image_adapter.load_state_dict(torch.load(opt.image_adapter_weight))
 
         # result 폴더 생성
-        self.result_dir = '../../../results/tsne'
+        self.result_dir = opt.output_dir
         os.makedirs(self.result_dir, exist_ok=True)
 
     def train(self, epoch):
+    
         
-        # wandb 초기화
-        wandb.init(
-            project="Controlnet",
-            config=vars(opt),  # opt의 모든 속성을 config로 추가
-            name=f"experiment_with_extractor_{opt.mode}_lr_{opt.lr}_epoch_{opt.epoch}_{opt.batchid} * {opt.batchimage}"
-        )
-        
-        self.extractor.train()  # freeze ID extractor
+        self.extractor.train()  # train ID extractor
         self.image_adapter.train()  # train image adapter
         self.text_encoder.eval()
 
@@ -133,71 +131,167 @@ class Main():
         
         return zip(*sampled_data)
 
-    def tsne_visualization(self, image_embeddings, text_embeddings, labels, epoch):
-        # 고유한 색상 생성
-        unique_labels = np.unique(labels)
-        n_classes = len(unique_labels)
-        colors = plt.cm.rainbow(np.linspace(0, 1, n_classes))
-        label_to_color = dict(zip(unique_labels, colors))
+    def tsne_visualization(self):
+        self.extractor.eval()
+        self.image_adapter.eval()
+        self.text_encoder.eval()
+        
+        #gallery_path = self.data.testset.imgs
+        gallery_label = torch.FloatTensor()
+        gallery_label = self.data.testset.ids
+        #gallery_captions = self.data.testset.captions
 
-        # 1. 이미지와 텍스트 임베딩 t-SNE
-        combined_embeddings = np.vstack((image_embeddings, text_embeddings))
-        tsne = TSNE(n_components=2, perplexity=30, n_iter=2000, random_state=42)
-        tsne_results = tsne.fit_transform(combined_embeddings)
+        # print("input_query_label: ", query_label)
         
-        image_tsne = tsne_results[:len(image_embeddings)]
-        text_tsne = tsne_results[len(image_embeddings):]
+        print('extract features, this may take a few minutes')
+        predict_feature_gallery, captions = extract_feature(self.extractor, tqdm(self.data.test_loader))
         
-        plt.figure(figsize=(15, 10))
-        for label in unique_labels:
-            img_mask = labels == label
-            txt_mask = labels == label
-            plt.scatter(image_tsne[img_mask, 0], image_tsne[img_mask, 1], c=[label_to_color[label]], marker='o', label=f'Image (Class {label})')
-            plt.scatter(text_tsne[txt_mask, 0], text_tsne[txt_mask, 1], c=[label_to_color[label]], marker='^', label=f'Text (Class {label})')
+        unique_ids = list(set(gallery_label))
+        selected_ids = random.sample(unique_ids, 30)
+        
+        gallery_label_array = np.array(gallery_label)
+        
+        selected_features = []
+        selected_labels = []
+        selected_captions = []
 
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.title('t-SNE visualization of Image and Text Embeddings')
-        plt.tight_layout()
+
+        for id in selected_ids:
+            indices = np.where(gallery_label_array == id)[0]
+            if len(indices) >= 10:
+                selected_indices = np.random.choice(indices, 10, replace=False)
+            else:
+                # Skip this ID if there are fewer than 10 samples
+                print(f"Skipping ID {id} as it has fewer than 10 samples")
+                continue
+            selected_features.extend(predict_feature_gallery[selected_indices])
+            selected_labels.extend([id] * 10)
+            selected_captions.extend([captions[i] for i in selected_indices])
+            
+        selected_features = np.array(selected_features)
+        selected_labels = np.array(selected_labels)
+
+        # 텍스트 임베딩 생성
+        with torch.no_grad():
+            text_inputs = self.processor(text=selected_captions, return_tensors="pt", padding=True, truncation=True).to('cuda')
+            selected_text_embeddings = self.text_encoder.get_text_features(**text_inputs).cpu().numpy()
+
+
+        # extractor class tsne
+        tsne = TSNE(n_components=2, perplexity=10, n_iter=2000, metric='cosine')
+        embedded_features = tsne.fit_transform(selected_features)
         
-        # wandb에 이미지와 텍스트 임베딩 t-SNE 결과 로깅
-        wandb.log({"tsne_plot_image_text": wandb.Image(plt)})
-        
-        # result 폴더에 저장
-        plt.savefig(os.path.join(self.result_dir, f'tsne_plot_image_text_epoch_{epoch}.png'), bbox_inches='tight')
+        # NumPy 배열을 PyTorch 텐서로 변환
+        embedded_features_tensor = torch.from_numpy(embedded_features).float().to('cuda')
+
+        # Plot
+        fig = plt.figure(figsize=(20, 20))
+        for label in set(selected_labels):
+            x = embedded_features[selected_labels == label, 0]
+            y = embedded_features[selected_labels == label, 1]
+            plt.scatter(x, y, label=label)
+            # Label each point with its corresponding ID
+            # for i, (x, y) in enumerate(zip(x, y)):
+            #     plt.text(x, y, f"{label}", fontsize=8, ha='center', va='center')
+        plt.legend()
+        plt.title('t-SNE Visualization of Predicted Features of extractor')
+        plt.savefig(os.path.join(opt.output_dir, 'extractor_tsne.png'))
         plt.close()
 
-        # 페어 간 평균 거리 및 유사도 계산
-        pair_distances = np.linalg.norm(image_tsne - text_tsne, axis=1)
-        avg_pair_distance = np.mean(pair_distances)
-        similarities = np.sum(image_embeddings * text_embeddings, axis=1) / (np.linalg.norm(image_embeddings, axis=1) * np.linalg.norm(text_embeddings, axis=1))
-        avg_similarity = np.mean(similarities)
+        if opt.mode == 'train':
+            # wandb에 extractor tsne 이미지 로깅
+            wandb.log({"Extractor t-SNE": wandb.Image("extractor_tsne.png")})
+        
+        
+        adapter_features = []
+        adapter_features = self.image_adapter(torch.from_numpy(selected_features).float().to('cuda'))
+        
+        # CUDA 텐서를 CPU로 이동하고 NumPy 배열로 변환
+        adapter_features_cpu = adapter_features.cpu().detach().numpy()
+        
+        # image adapter class tsne
+        tsne = TSNE(n_components=2, perplexity=10, n_iter=2000, metric='cosine')
+        adapter_embedded_features = tsne.fit_transform(adapter_features_cpu)
+        
+        # Plot
+        fig = plt.figure(figsize=(20, 20))
+        for label in set(selected_labels):
+            x = adapter_embedded_features[selected_labels == label, 0]
+            y = adapter_embedded_features[selected_labels == label, 1]
+            plt.scatter(x, y, label=label)
+            # Label each point with its corresponding ID
+            # for i, (x, y) in enumerate(zip(x, y)):
+            #     plt.text(x, y, f"{label}", fontsize=8, ha='center', va='center')
+        plt.legend()
+        plt.title('t-SNE Visualization of Predicted Features of image adapter')
+        plt.savefig(os.path.join(opt.output_dir, 'image_adapter_tsne.png'))
+        plt.close()
 
-        # wandb에 평균 거리와 유사도 로깅
-        wandb.log({
-            "avg_pair_distance": avg_pair_distance,
-            "avg_similarity": avg_similarity
+        if opt.mode == 'train':
+            # wandb에 image adapter tsne 이미지 로깅
+            wandb.log({"Image Adapter t-SNE": wandb.Image("image_adapter_tsne.png")})
+        
+        
+        # 텍스트와 이미지 임베딩 t-SNE
+        combined_embeddings = np.concatenate([adapter_features_cpu, selected_text_embeddings], axis=0)
+        combined_labels = np.concatenate([selected_labels, selected_labels])
+        
+        tsne = TSNE(n_components=2, perplexity=10, n_iter=2000, metric='cosine')
+        combined_embedded_features = tsne.fit_transform(combined_embeddings)
+        
+        # 색상 맵 생성
+        unique_labels = set(selected_labels)
+        color_map = dict(zip(unique_labels, plt.cm.rainbow(np.linspace(0, 1, len(unique_labels)))))
+
+        # 플롯
+        fig, ax = plt.subplots(figsize=(20, 20))
+        n = len(selected_labels)
+
+        cosine_similarities = []
+        euclidean_distances = []
+
+        for label in unique_labels:
+            x_img = combined_embedded_features[:n][combined_labels[:n] == label, 0]
+            y_img = combined_embedded_features[:n][combined_labels[:n] == label, 1]
+            x_txt = combined_embedded_features[n:][combined_labels[n:] == label, 0]
+            y_txt = combined_embedded_features[n:][combined_labels[n:] == label, 1]
+            
+            color = color_map[label]
+            ax.scatter(x_img, y_img, color=color, label=f'Image {label}')
+            ax.scatter(x_txt, y_txt, color=color, marker='x', label=f'Text {label}')
+            
+            # 코사인 유사도와 유클리드 거리 계산
+            for img_emb, txt_emb in zip(adapter_features_cpu[combined_labels[:n] == label],
+                                        selected_text_embeddings[combined_labels[n:] == label]):
+                cosine_similarities.append(1 - cosine(img_emb, txt_emb))
+                euclidean_distances.append(euclidean(img_emb, txt_emb))
+
+        # 평균 코사인 유사도와 유클리드 거리 계산
+        avg_cosine_similarity = np.mean(cosine_similarities)
+        avg_euclidean_distance = np.mean(euclidean_distances)
+
+        # 결과 텍스트 추가
+        result_text = f"average cosine similarity: {avg_cosine_similarity:.4f}\naverage euclidean distance: {avg_euclidean_distance:.4f}"
+        ax.text(0.02, 0.98, result_text, transform=ax.transAxes, verticalalignment='top', fontsize=12, 
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.set_title('t-SNE Visualization of Image and Text Embeddings')
+        plt.tight_layout()
+        plt.savefig(os.path.join(opt.output_dir, 'combined_tsne.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"결과가 combined_tsne.png 파일에 저장되었습니다.")
+
+        if opt.mode == 'train':
+            # wandb에 combined tsne 이미지 및 메트릭 로깅
+            wandb.log({
+                "Combined t-SNE": wandb.Image("combined_tsne.png"),
+            "Average Cosine Similarity": avg_cosine_similarity,
+            "Average Euclidean Distance": avg_euclidean_distance
         })
-
-        # 2. 클래스별 t-SNE
-        tsne_image_adapter = TSNE(n_components=2, perplexity=30, n_iter=2000, random_state=42)
-        tsne_results_image_adapter = tsne_image_adapter.fit_transform(image_embeddings)
-
-        plt.figure(figsize=(15, 10))
-        for label in unique_labels:
-            mask = labels == label
-            plt.scatter(tsne_results_image_adapter[mask, 0], tsne_results_image_adapter[mask, 1], 
-                        c=[label_to_color[label]], label=f'Class {label}')
-
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.title('t-SNE visualization of Image Adapter Features by Class')
-        plt.tight_layout()
         
-        # wandb에 클래스별 t-SNE 결과 로깅
-        wandb.log({"tsne_plot_class": wandb.Image(plt)})
         
-        # result 폴더에 저장
-        plt.savefig(os.path.join(self.result_dir, f'tsne_plot_class_epoch_{epoch}.png'), bbox_inches='tight')
-        plt.close()
 
 if __name__ == '__main__':
     extractor = MGN().to('cuda')
@@ -205,22 +299,28 @@ if __name__ == '__main__':
     main = Main(extractor, image_adapter)
 
     if opt.mode == 'train':
+        # wandb 초기화
+        wandb.init(
+            project="Controlnet",
+            config=vars(opt),  # opt의 모든 속성을 config로 추가
+            name=f"extractor_adapter_llava_1.0_0.1_1.0_margin2_temperature0.20"
+        )
         for epoch in range(1, opt.epoch + 1):
             print('\nepoch', epoch)
             
             main.train(epoch)
-            if epoch % 500 == 0:
+            if epoch % 100 == 0:
                 print('\n모델 저장 시작')
-                os.makedirs('../../../weights/id_extractor/256_resume_extractor_adapter', exist_ok=True)
-                os.makedirs('../../../weights/image_adapter/256_resume_extractor_adapter', exist_ok=True)
+                os.makedirs(f'{opt.output_dir}/id_extractor', exist_ok=True)
+                os.makedirs(f'{opt.output_dir}/image_adapter', exist_ok=True)
                 
                 # extractor 가중치 저장
-                extractor_path = f'../../../weights/id_extractor/256_resume_extractor_adapter/extractor_{epoch}.pt'
+                extractor_path = f'{opt.output_dir}/id_extractor/extractor_{epoch}.pt'
                 torch.save(extractor.state_dict(), extractor_path)
                 print(f'Extractor 가중치가 {extractor_path}에 저장되었습니다.')
                 
                 # image_adapter 가중치 저장
-                image_adapter_path = f'../../../weights/image_adapter/256_resume_extractor_adapter/image_adapter_{epoch}.pt'
+                image_adapter_path = f'{opt.output_dir}/image_adapter/image_adapter_{epoch}.pt'
                 torch.save(image_adapter.state_dict(), image_adapter_path)
                 print(f'Image Adapter 가중치가 {image_adapter_path}에 저장되었습니다.')
                 
@@ -229,25 +329,15 @@ if __name__ == '__main__':
                     print('두 모델의 가중치가 성공적으로 저장되었습니다.')
                 else:
                     print('가중치 저장 중 오류가 발생했습니다. 파일 경로를 확인해주세요.')
-                
-                # t-SNE 시각화 수행
-                print('\nPerforming t-SNE visualization')
-                with torch.no_grad():
-                    imgs, labels, captions = main.sample_data()
-                    inputs = torch.stack([main.train_loader.dataset.transform(Image.open(img).convert('RGB')) for img in imgs]).to('cuda')
-                    outputs = extractor(inputs)
-                    embedding_feature = outputs[0]
-                    projected_image_embedding = image_adapter(embedding_feature)
-                    text_inputs = main.processor(text=captions, return_tensors="pt", padding=True).to('cuda')
-                    text_embedding = main.text_encoder.get_text_features(**text_inputs)
-                
-                main.tsne_visualization(projected_image_embedding.cpu().numpy(), 
-                                        text_embedding.cpu().numpy(), 
-                                        np.array(labels),
-                                        epoch)
+                    
+                main.tsne_visualization()
 
     if opt.mode == 'evaluate':
         print('start evaluate')
         extractor.load_state_dict(torch.load(opt.weight))
         main.evaluate()
+        
+    if opt.mode == 'tsne':
+        print('start tsne')
+        main.tsne_visualization()
 

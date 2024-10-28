@@ -9,9 +9,9 @@ class Loss(loss._Loss):
     def __init__(self):
         super(Loss, self).__init__()
         # 추가된 contrastive loss 계산을 위한 온도 파라미터
-        self.temperature = 0.07
+        self.temperature = 0.20
         self.cross_entropy_loss = CrossEntropyLoss()
-        self.triplet_loss = TripletLoss(margin=1.2)
+        self.triplet_loss = TripletLoss(margin=2.0)
         self.cosine_similarity = nn.CosineSimilarity(dim=-1)
 
     def contrastive_loss(self, image_embeds, text_embeds):
@@ -27,18 +27,21 @@ class Loss(loss._Loss):
 
     def forward(self, outputs, labels, image_embeds, text_embeds):
         # Triplet Loss 계산
-        Triplet_Loss = [self.triplet_loss(output, labels) for output in outputs[1:4]]
+        Triplet_Loss = [self.triplet_loss(outputs, labels) for outputs in outputs[1:4]]
         Triplet_Loss = sum(Triplet_Loss) / len(Triplet_Loss)
+        #Triplet_Loss = self.triplet_loss(image_embeds, labels)
+        
 
         # CrossEntropy Loss 계산
-        CrossEntropy_Loss = [self.cross_entropy_loss(output, labels) for output in outputs[4:]]
+        #CrossEntropy_Loss = [self.cross_entropy_loss(image_embeds, labels) for image_embeds in image_embeds[4:]]
+        CrossEntropy_Loss = [self.cross_entropy_loss(outputs, labels) for outputs in outputs[4:]]
         CrossEntropy_Loss = sum(CrossEntropy_Loss) / len(CrossEntropy_Loss)
 
         # Contrastive Loss 계산
         Contrastive_Loss = self.contrastive_loss(image_embeds, text_embeds)
 
         # 최종 손실 함수 계산 (Triplet Loss + CrossEntropy Loss + Contrastive Loss)
-        loss_sum = 0.5 * Triplet_Loss + 0.1 *CrossEntropy_Loss + 2 * Contrastive_Loss
+        loss_sum = Triplet_Loss + 0.1 * CrossEntropy_Loss + Contrastive_Loss
 
         print('total loss: {:.2f}, Triplet_Loss: {:.2f}, CrossEntropy_Loss: {:.2f}, Contrastive_Loss: {:.2f}'.format(
             loss_sum.item(),

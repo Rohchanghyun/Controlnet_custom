@@ -42,9 +42,9 @@ class Data():
         query_dir = os.path.join(opt.data_path, 'query')
 
         # 캡션 파일 경로 설정
-        train_caption_file = os.path.join(opt.data_path, 'captions', 'train_captions.json')
-        query_caption_file = os.path.join(opt.data_path, 'captions', 'query_captions.json')
-        test_caption_file = os.path.join(opt.data_path, 'captions', 'test_captions.json')
+        train_caption_file = os.path.join(opt.data_path, 'captions_llava', 'train_captions.json')
+        query_caption_file = os.path.join(opt.data_path, 'captions_llava', 'query_captions.json')
+        test_caption_file = os.path.join(opt.data_path, 'captions_llava', 'test_captions.json')
 
         # Train IDs 가져오기
         train_ids = [
@@ -64,7 +64,7 @@ class Data():
         id2label = {id_name: idx for idx, id_name in enumerate(test_ids)}
 
         # 데이터셋 생성 (캡션 파일을 사용하여 데이터셋을 초기화)
-        self.trainset = Top15Dataset(train_transform, 'train_limit', train_dir, caption_file=train_caption_file)
+        self.trainset = Top15Dataset(train_transform, 'train', train_dir, caption_file=train_caption_file)
         self.testset = Top15Dataset(test_transform, 'test', test_dir, caption_file=test_caption_file, id2label=id2label)
         self.queryset = Top15Dataset(test_transform, 'query', query_dir, caption_file=query_caption_file, id2label=id2label)
 
