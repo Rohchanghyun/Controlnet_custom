@@ -64,7 +64,7 @@ class Main():
     def train(self, epoch):
     
         
-        self.extractor.train()  # train ID extractor
+        self.extractor.eval()  # train ID extractor
         self.image_adapter.train()  # train image adapter
         self.text_encoder.eval()
 
@@ -74,7 +74,7 @@ class Main():
             inputs = inputs.to('cuda')
             labels = labels.to('cuda')
             self.optimizer.zero_grad()
-
+            print(inputs.shape)
             # Image embedding
             outputs = self.extractor(inputs)
             embedding_feature = outputs[0]  # (batch, 2048) embedding 추출
@@ -200,7 +200,7 @@ class Main():
 
         if opt.mode == 'train':
             # wandb에 extractor tsne 이미지 로깅
-            wandb.log({"Extractor t-SNE": wandb.Image("extractor_tsne.png")})
+            wandb.log({"Extractor t-SNE": wandb.Image(os.path.join(opt.output_dir, 'extractor_tsne.png'))})
         
         
         adapter_features = []
@@ -229,7 +229,7 @@ class Main():
 
         if opt.mode == 'train':
             # wandb에 image adapter tsne 이미지 로깅
-            wandb.log({"Image Adapter t-SNE": wandb.Image("image_adapter_tsne.png")})
+            wandb.log({"Image Adapter t-SNE": wandb.Image(os.path.join(opt.output_dir, 'image_adapter_tsne.png'))})
         
         
         # 텍스트와 이미지 임베딩 t-SNE
@@ -270,9 +270,53 @@ class Main():
         avg_cosine_similarity = np.mean(cosine_similarities)
         avg_euclidean_distance = np.mean(euclidean_distances)
 
+        # 클래스 내부 및 클래스 간 거리 계산
+        intra_class_img_dist = []
+        intra_class_txt_dist = []
+        inter_class_img_dist = []
+        inter_class_txt_dist = []
+
+        for label in unique_labels:
+            # 같은 클래스 내의 이미지 임베딩
+            img_embs = adapter_features_cpu[combined_labels[:n] == label]
+            # 같은 클래스 내의 텍스트 임베딩
+            txt_embs = selected_text_embeddings[combined_labels[n:] == label]
+            
+            # 클래스 내부 분산 계산
+            if len(img_embs) > 1:
+                img_distances = cdist(img_embs, img_embs, metric='cosine')
+                intra_class_img_dist.extend(img_distances[np.triu_indices(len(img_embs), k=1)])
+            
+            if len(txt_embs) > 1:
+                txt_distances = cdist(txt_embs, txt_embs, metric='cosine')
+                intra_class_txt_dist.extend(txt_distances[np.triu_indices(len(txt_embs), k=1)])
+            
+            # 다른 클래스와의 거리 계산
+            other_img_embs = adapter_features_cpu[combined_labels[:n] != label]
+            other_txt_embs = selected_text_embeddings[combined_labels[n:] != label]
+            
+            if len(img_embs) > 0 and len(other_img_embs) > 0:
+                inter_class_img_dist.extend(cdist(img_embs, other_img_embs, metric='cosine').flatten())
+            
+            if len(txt_embs) > 0 and len(other_txt_embs) > 0:
+                inter_class_txt_dist.extend(cdist(txt_embs, other_txt_embs, metric='cosine').flatten())
+
+        # 평균값 계산
+        avg_intra_img = np.mean(intra_class_img_dist) if intra_class_img_dist else 0
+        avg_intra_txt = np.mean(intra_class_txt_dist) if intra_class_txt_dist else 0
+        avg_inter_img = np.mean(inter_class_img_dist) if inter_class_img_dist else 0
+        avg_inter_txt = np.mean(inter_class_txt_dist) if inter_class_txt_dist else 0
+
         # 결과 텍스트 추가
-        result_text = f"average cosine similarity: {avg_cosine_similarity:.4f}\naverage euclidean distance: {avg_euclidean_distance:.4f}"
-        ax.text(0.02, 0.98, result_text, transform=ax.transAxes, verticalalignment='top', fontsize=12, 
+        result_text = (
+            f"average cosine similarity: {avg_cosine_similarity:.4f}\n"
+            f"average euclidean distance: {avg_euclidean_distance:.4f}\n"
+            f"intra-class image distance: {avg_intra_img:.4f}\n"
+            f"intra-class text distance: {avg_intra_txt:.4f}\n"
+            f"inter-class image distance: {avg_inter_img:.4f}\n"
+            f"inter-class text distance: {avg_inter_txt:.4f}"
+        )
+        ax.text(0.02, 0.98, result_text, transform=ax.transAxes, verticalalignment='top', fontsize=12,
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -286,10 +330,10 @@ class Main():
         if opt.mode == 'train':
             # wandb에 combined tsne 이미지 및 메트릭 로깅
             wandb.log({
-                "Combined t-SNE": wandb.Image("combined_tsne.png"),
-            "Average Cosine Similarity": avg_cosine_similarity,
-            "Average Euclidean Distance": avg_euclidean_distance
-        })
+                "Combined t-SNE": wandb.Image(os.path.join(opt.output_dir, 'combined_tsne.png')),
+                "Average Cosine Similarity": avg_cosine_similarity,
+                "Average Euclidean Distance": avg_euclidean_distance
+            })
         
         
 
@@ -303,7 +347,7 @@ if __name__ == '__main__':
         wandb.init(
             project="Controlnet",
             config=vars(opt),  # opt의 모든 속성을 config로 추가
-            name=f"extractor_adapter_llava_1.0_0.1_1.0_margin2_temperature0.20"
+            name=f"only_adapter_llava_1.0_0.1_1.0_margin2_temperature0.20"
         )
         for epoch in range(1, opt.epoch + 1):
             print('\nepoch', epoch)
@@ -340,4 +384,3 @@ if __name__ == '__main__':
     if opt.mode == 'tsne':
         print('start tsne')
         main.tsne_visualization()
-
