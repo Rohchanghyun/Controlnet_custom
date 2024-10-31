@@ -19,15 +19,15 @@ parser.add_argument('--freeze',
                     help='freeze backbone or not ')
 
 parser.add_argument('--extractor_weight',
-                    default=None,
+                    default="../../../output/global_adapter/256/extractor/model_2000.pt",
                     help='load weights ')
 
 parser.add_argument('--image_adapter_weight',
-                    default=None,
+                    default="../../../output/global_adapter/256/256_resume_adapter_best/image_adapter_2000.pt",
                     help='load weights ')
 
 parser.add_argument('--epoch',
-                    default=3000,
+                    default=20000,
                     help='number of epoch to train')
 
 parser.add_argument('--lr',
@@ -43,7 +43,7 @@ parser.add_argument("--batchid",
                     help='the batch for id')
 
 parser.add_argument("--batchimage",
-                    default=8,
+                    default=1,
                     help='the batch of per id')
 
 parser.add_argument("--batchtest",

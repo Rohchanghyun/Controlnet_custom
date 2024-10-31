@@ -17,7 +17,7 @@ from transformers import CLIPProcessor, CLIPModel
 
 from opt import opt
 from data import Data
-from network import MGN, Image_adapter
+from network import MGN, Image_adapter, Image_adapter_768
 from loss import Loss
 from utils.get_optimizer import get_optimizer
 from utils.extract_feature import extract_feature
@@ -45,8 +45,8 @@ class Main():
         self.loss = Loss()
         self.optimizer = get_optimizer(self.extractor, self.image_adapter)
 
-        self.text_encoder = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to('cuda')
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.text_encoder = CLIPModel.from_pretrained("openai/clip-vit-large-patch14").to('cuda')
+        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
 
         # load pretrained weight
         if hasattr(opt, 'extractor_weight') and opt.extractor_weight:
@@ -85,7 +85,7 @@ class Main():
                 # 캡션 텍스트를 전처리
                 text_inputs = self.processor(text=captions, return_tensors="pt", padding=True).to('cuda')
                 text_embedding = self.text_encoder.get_text_features(**text_inputs)
-
+            
             # 손실 계산 및 역전파
             loss, Triplet_Loss, CrossEntropy_Loss, Contrastive_Loss = self.loss(outputs, labels, projected_image_embedding, text_embedding)
             loss.backward()
@@ -338,7 +338,7 @@ class Main():
 
 if __name__ == '__main__':
     extractor = MGN().to('cuda')
-    image_adapter = Image_adapter().to('cuda')
+    image_adapter = Image_adapter_768().to('cuda')
     main = Main(extractor, image_adapter)
 
     if opt.mode == 'train':
@@ -346,7 +346,7 @@ if __name__ == '__main__':
         wandb.init(
             project="Controlnet",
             config=vars(opt),  # opt의 모든 속성을 config로 추가
-            name=f"only_adapter_llava_1.0_0.1_1.0_margin2_temperature0.20"
+            name=f"768_only_adapter_BLIP_0.5_0.5_2.0_margin2_temperature0.20"
         )
         for epoch in range(1, opt.epoch + 1):
             print('\nepoch', epoch)

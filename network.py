@@ -161,3 +161,68 @@ class Image_adapter(nn.Module):
     def forward(self, image_embeds):
         projection_embedding = self.proj(image_embeds)
         return projection_embedding 
+
+
+class Image_adapter_768(nn.Module):
+    """project image embedding to CLIP embedding space"""
+    def __init__(self, extractor_dim=2048, hidden_dim=1024, clip_embeddings_dim=768):
+        super(Image_adapter_768, self).__init__()
+        
+        self.proj = torch.nn.Sequential(
+            torch.nn.Linear(extractor_dim, hidden_dim),
+            torch.nn.GELU(),
+            torch.nn.Linear(hidden_dim, clip_embeddings_dim),
+            torch.nn.LayerNorm(clip_embeddings_dim)
+        )
+        
+    #     self._init_weights()
+
+    # def _init_weights(self):
+    #     for m in self.proj:
+    #         if isinstance(m, nn.Linear):
+    #             nn.init.constant_(m.weight, 0)
+    #             if m.bias is not None:
+    #                 nn.init.constant_(m.bias, 0)
+    #         elif isinstance(m, nn.LayerNorm):
+    #             nn.init.constant_(m.bias, 0)
+    #             nn.init.constant_(m.weight, 0)
+
+    def forward(self, image_embeds):
+        projection_embedding = self.proj(image_embeds)
+        return projection_embedding 
+    
+    
+class Base_adapter(nn.Module):
+    """project image embedding to CLIP embedding space"""
+    def __init__(self, input_dim=512, hidden_dim=1024, output_dim=768):
+        super(Base_adapter, self).__init__()
+        
+        self.proj = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, output_dim),
+            nn.LayerNorm(output_dim)
+        )
+    
+    def blend_embeds(self, image_embeds, text_embeds):
+        # image_embeds: (1, 512)
+        # text_embeds: (1, 77, 512)
+        
+        # 이미지 임베딩을 text_embeds와 같은 shape으로 확장
+        # (1, 512) -> (1, 1, 512) -> (1, 77, 512)
+        expanded_image_embeds = image_embeds.unsqueeze(1).expand(-1, text_embeds.size(1), -1)
+        
+        # element-wise 곱셈 수행
+        # (1, 77, 512) * (1, 77, 512) -> (1, 77, 512)
+        blended = expanded_image_embeds * text_embeds
+        
+        return blended
+
+
+    def forward(self, image_embeds, text_embeds):
+        blended_embedding = self.blend_embeds(image_embeds, text_embeds)
+        output_embedding = self.proj(blended_embedding)
+        return output_embedding 
+    

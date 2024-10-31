@@ -8,14 +8,6 @@ import torch.nn.functional as F
 import numpy as np
 
 import pdb
-def blend_embeddings(a, b):
-    # a를 b와 같은 shape으로 확장 [1, 512] -> [1, x, 512]
-    a_expanded = a.unsqueeze(1).expand(-1, b.size(1), -1)
-    
-    # 0.5:0.5 비율로 블렌딩
-    blended = 0.5 * a_expanded + 0.5 * b
-    
-    return blended
 
 def generate_image_with_adapter():
     # extractor 로드
@@ -26,8 +18,8 @@ def generate_image_with_adapter():
     image_adapter = Image_adapter().to("cuda")
     image_adapter.load_state_dict(torch.load("/workspace/data/changhyun/output/global_adapter/256/256_resume_adapter_best/image_adapter_2000.pt"))
     
-    text_encoder = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to('cuda')
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    text_encoder = CLIPModel.from_pretrained("openai/clip-vit-large-patch14").to('cuda')
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
     
     # 이미지 로드 및 전처리
     input_image = Image.open("/workspace/data/changhyun/dataset/emoji_data/test/Eren Yeager/Image_18.jpg")
@@ -53,13 +45,12 @@ def generate_image_with_adapter():
     with torch.no_grad():
         # 캡션 텍스트를 전처리
         text_inputs = processor(text="A character with black hair and brown leather jacket", return_tensors="pt", padding=True).to('cuda')
-        text_outputs = text_encoder.text_model(**text_inputs)
-        text_embedding = text_outputs.last_hidden_state
-    print(f'image_embedding: {adapted_features.shape}')    
-    print(f'text_inputs: {text_inputs}')
-    print(f'text_outputs: {len(text_outputs)}, {len(text_outputs[0])}, {len(text_outputs[0][0])}, {len(text_outputs[0][0][0])}')
-    print(f'text_embedding: {text_embedding.shape}')  
+        text_embedding = text_encoder.get_text_features(**text_inputs)
+        
+    print(text_inputs)    
+    print(text_embedding.shape)
     
+    pdb.set_trace()
     # Cross Attention 레이어 정의
     class CrossAttention(nn.Module):
         def __init__(self, dim, out_dim):
@@ -83,19 +74,20 @@ def generate_image_with_adapter():
     cross_attention = CrossAttention(dim=512, out_dim=768).to('cuda')  # dim은 임베딩 차원에 맞게 조정
     
     # Cross Attention 적용
-    fused_features = blend_embeddings(adapted_features, text_embedding)
+    fused_features = cross_attention(adapted_features, text_embedding)
     
-    # UNet의 cross attention에서 사용할 수 있도록 차원 조정
-    # [batch_size, sequence_length, hidden_size]
+    # fused_features 형태 변환 [1, 768] -> [1, 77, 768]
+    fused_features = fused_features.unsqueeze(1)  # [1, 1, 768]
+    fused_features = fused_features.repeat(1, 77, 1)  # [1, 77, 768]로 복제
     
     # float16으로 변환
     fused_features = fused_features.to(dtype=torch.float16)
     
     print("Fused features shape:", fused_features.shape)  # 확인용
     
-    # SD 1.5 모델 로드# stabilityai/stable-diffusion-2-base
+    # SD 1.5 모델 로드
     pipe = StableDiffusionPipeline.from_pretrained(
-        "CompVis/stable-diffusion-v1-1",
+        "runwayml/stable-diffusion-v1-5",
         torch_dtype=torch.float16
     ).to("cuda")
     
@@ -124,12 +116,12 @@ def generate_image_with_adapter():
         # latents를 모델에 입력할 형태로 확장
         latent_model_input = scheduler.scale_model_input(latents, t)
         
-        # UNet에 fused_features를 cross attention 임베딩으로 전달
+        # fused_features를 condition으로 사용
         with torch.no_grad():
             noise_pred = pipe.unet(
                 latent_model_input,
                 t,
-                encoder_hidden_states=fused_features,  # cross attention 임베딩으로 사용
+                encoder_hidden_states=fused_features
             ).sample
         
         # 스케줄러 스텝

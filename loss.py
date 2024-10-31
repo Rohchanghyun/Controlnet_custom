@@ -41,7 +41,7 @@ class Loss(loss._Loss):
         Contrastive_Loss = self.contrastive_loss(image_embeds, text_embeds)
 
         # 최종 손실 함수 계산 (Triplet Loss + CrossEntropy Loss + Contrastive Loss)
-        loss_sum = Triplet_Loss + 0.1 * CrossEntropy_Loss + 2 * Contrastive_Loss
+        loss_sum = Triplet_Loss + CrossEntropy_Loss + Contrastive_Loss
 
         print('total loss: {:.2f}, Triplet_Loss: {:.2f}, CrossEntropy_Loss: {:.2f}, Contrastive_Loss: {:.2f}'.format(
             loss_sum.item(),
