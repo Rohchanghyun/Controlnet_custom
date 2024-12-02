@@ -1,0 +1,12 @@
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.ptl
+*.pthl
+*.ckpl
+*.pkl
+
+echo "wandb/"

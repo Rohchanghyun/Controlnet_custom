@@ -1,0 +1,17 @@
+
+scipy
+numpy
+scikit_learn
+matplotlib
+transformers
+wandb
+xformers
+torch
+moviepy
+opencv-python
+pillow
+diffusers
+safetensors
+peft
+decord
+einops
