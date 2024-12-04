@@ -65,6 +65,11 @@ parser.add_argument("--optimizer",
                     default='adamw',
                     help='optimizer')
 
+parser.add_argument("--weight_decay",
+                    type=float,
+                    default=1e-4,
+                    help='weight decay for optimizer')
+
 parser.add_argument("--output_dir",
                     default='../../../output/256/',
                     help='output_dir')
