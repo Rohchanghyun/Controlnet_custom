@@ -236,6 +236,9 @@ class Main():
         os.makedirs(self.result_dir, exist_ok=True)
         
     def train(self, epoch):
+        # 결과 저장할 디렉토리 생성
+        os.makedirs(f'{opt.output_dir}/results', exist_ok=True)
+        
         self.unet.eval()
         self.image_adapter.train()
         total_loss = 0
@@ -268,6 +271,16 @@ class Main():
             embedding_feature = outputs[0]
             projected_image_embedding = self.image_adapter(embedding_feature)
             
+            # 임베딩 차원의 10%를 랜덤하게 0으로 만듦
+            batch_size, seq_length, hidden_dim = projected_image_embedding.shape
+            mask_size = int(hidden_dim * 0.1)  # 10% 계산
+            
+            for b in range(batch_size):
+                for s in range(seq_length):
+                    # 각 시퀀스마다 랜덤하게 인덱스 선택
+                    zero_indices = torch.randperm(hidden_dim)[:mask_size]
+                    projected_image_embedding[b, s, zero_indices] = 0
+            
             with torch.no_grad():
                 text_input_ids = self.tokenizer(
                     captions,
@@ -279,7 +292,7 @@ class Main():
                 
                 text_embeddings = self.text_encoder(text_input_ids)[0]
             
-            conditions = torch.cat([projected_image_embedding, text_embeddings], dim=1)
+            conditions = torch.cat([text_embeddings, projected_image_embedding], dim=1) # concat 하는 순서 중요
             
             # UNet으로 노이즈 예측
             noise_pred = self.unet(
@@ -347,7 +360,7 @@ class Main():
                     
                     uncond_embeddings = self.text_encoder(uncond_text_input.input_ids)[0]
                     uncond_embeddings = uncond_embeddings.repeat(projected_image_embedding.shape[0], 1, 1)
-                    uncond_conditions = torch.cat([uncond_image_input, uncond_embeddings], dim=1)
+                    uncond_conditions = torch.cat([uncond_embeddings, uncond_image_input], dim=1)
                     
                     # 노이즈에서 이미지 생성
                     latents = torch.randn((1, 4, 96, 96), device='cuda')
@@ -436,8 +449,6 @@ class Main():
 
 if __name__ == '__main__':
     # wandb 초기화 전에 GPU 설정 확인
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  # 이미 shell script에서 설정했지만 확실히 하기 위해
     
     extractor = MGN().to('cuda')
     image_adapter = Image_adapter(extractor_dim=2048, hidden_dim=1024, clip_embeddings_dim=opt.clip_embeddings_dim).to('cuda')

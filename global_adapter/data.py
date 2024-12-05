@@ -16,7 +16,7 @@ class Data():
         train_transform = transforms.Compose([
             # 이미지를 RGB 모드로 변환하여 투명도 채널 제거
             transforms.Lambda(lambda img: img.convert('RGB')),
-            transforms.Resize((768, 768), interpolation=3),
+            transforms.Resize((512, 512), interpolation=3),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
@@ -24,7 +24,7 @@ class Data():
 
         test_transform = transforms.Compose([
             transforms.Lambda(lambda img: img.convert('RGB')),
-            transforms.Resize((768, 768), interpolation=3),
+            transforms.Resize((512, 512), interpolation=3),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])

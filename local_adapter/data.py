@@ -16,7 +16,7 @@ class Data():
         train_transform = transforms.Compose([
             # 이미지를 RGB 모드로 변환하여 투명도 채널 제거
             transforms.Lambda(lambda img: img.convert('RGB')),
-            transforms.Resize((768, 768), interpolation=3),
+            transforms.Resize((512, 512), interpolation=3),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
@@ -24,7 +24,7 @@ class Data():
 
         test_transform = transforms.Compose([
             transforms.Lambda(lambda img: img.convert('RGB')),
-            transforms.Resize((768, 768), interpolation=3),
+            transforms.Resize((512, 512), interpolation=3),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
@@ -38,27 +38,7 @@ class Data():
         # 데이터셋 경로 설정
         train_dir = os.path.join(opt.data_path, 'train')
         test_dir = os.path.join(opt.data_path, 'test')
-        query_dir = os.path.join(opt.data_path, 'query')
-
-        # 캡션 파일 경로 설정
-        # top15character 사용 시 caption 
-        # train_caption_file = os.path.join(opt.data_path, 'captions_ollama', 'train_captions.json')
-        # query_caption_file = os.path.join(opt.data_path, 'captions_ollama', 'query_captions.json')
-        # test_caption_file = os.path.join(opt.data_path, 'captions_ollama', 'test_captions.json')
-
-        # danbooru 사용 시 caption
         caption_dir = os.path.join(opt.data_path, 'captions')
-        self.trainset = DanbooruDataset(train_transform, 'train', train_dir, caption_dir=caption_dir)
-        self.testset = DanbooruDataset(test_transform, 'test', test_dir, caption_dir=caption_dir, id2label=id2label)
-        self.queryset = DanbooruDataset(test_transform, 'query', query_dir, caption_dir=caption_dir, id2label=id2label)
-        
-
-        # Train IDs 가져오기
-        train_ids = [
-            d for d in os.listdir(train_dir)
-            if os.path.isdir(os.path.join(train_dir, d))
-        ]
-        train_ids.sort()  # 일관된 순서를 위해 정렬
 
         # Test IDs 가져오기 (test와 query는 동일한 ID를 가집니다)
         test_ids = [
@@ -67,35 +47,29 @@ class Data():
         ]
         test_ids.sort()
 
-        # 테스트 및 쿼리 세트를 위한 id2label 매핑 생성
+        # id2label 매핑 생성
         id2label = {id_name: idx for idx, id_name in enumerate(test_ids)}
 
-        # 데이터셋 생성 (캡션 파일을 사용하여 데이터셋을 초기화)
-
-        # self.trainset = Top15Dataset(train_transform, 'train', train_dir, caption_file=train_caption_file)
-        # self.testset = Top15Dataset(test_transform, 'test', test_dir, caption_file=test_caption_file, id2label=id2label)
-        # self.queryset = Top15Dataset(test_transform, 'query', query_dir, caption_file=query_caption_file, id2label=id2label)
-
+        # 데이터셋 생성
         self.trainset = DanbooruDataset(train_transform, 'train', train_dir, caption_dir=caption_dir)
         self.testset = DanbooruDataset(test_transform, 'test', test_dir, caption_dir=caption_dir, id2label=id2label)
-        self.queryset = DanbooruDataset(test_transform, 'query', query_dir, caption_dir=caption_dir, id2label=id2label)
-        
-        # 데이터로더 생성
-        self.train_loader = DataLoader(
-            self.trainset,
-            sampler=RandomSampler(self.trainset, batch_id=opt.batchid,
-                                  batch_image=opt.batchimage),
-            batch_size=opt.batchid * opt.batchimage,
-            num_workers=8,
-            pin_memory=True
-        )
-        self.test_loader = DataLoader(self.testset, batch_size=opt.batchtest,
-                                      num_workers=8, pin_memory=True)
-        self.query_loader = DataLoader(self.queryset, batch_size=opt.batchtest,
-                                       num_workers=8, pin_memory=True)
 
-        if opt.mode == 'vis':
-            self.query_image = test_transform(default_loader(opt.query_image))
+        
+        # Train IDs 가져오기
+        train_ids = [
+            d for d in os.listdir(train_dir)
+            if os.path.isdir(os.path.join(train_dir, d))
+        ]
+        train_ids.sort()  # 일관된 순서를 위해 정렬
+
+        # 데이터로더 생성
+        self.train_loader = DataLoader(self.trainset, batch_size=opt.batchid * opt.batchimage,shuffle=True,
+                                       num_workers=8, pin_memory=True)
+        self.test_loader = DataLoader(self.testset, batch_size=opt.batchtest,shuffle=True,
+                                      num_workers=8, pin_memory=True)
+
+
+
 
 class Top15Dataset(Dataset):
     def __init__(self, transform, dtype, data_path, id2label=None, caption_file=None):
