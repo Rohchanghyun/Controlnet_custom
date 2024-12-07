@@ -138,7 +138,7 @@ class Main():
             print(f"Loading pretrained weights from {opt.extractor_weight}")
             self.extractor.load_state_dict(torch.load(opt.extractor_weight))
 
-        self.model_id = "runwayml/stable-diffusion-v1-5"
+        self.model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
         self.noise_scheduler = DDPMScheduler.from_pretrained(
             self.model_id,
             subfolder="scheduler"
@@ -270,6 +270,16 @@ class Main():
             outputs = self.extractor(inputs)
             embedding_feature = outputs[0]
             projected_image_embedding = self.image_adapter(embedding_feature)
+            
+            # 임베딩 차원의 10%를 랜덤하게 0으로 만듦
+            batch_size, seq_length, hidden_dim = projected_image_embedding.shape
+            mask_size = int(hidden_dim * 0.1)  # 10% 계산
+            
+            for b in range(batch_size):
+                for s in range(seq_length):
+                    # 각 시퀀스마다 랜덤하게 인덱스 선택
+                    zero_indices = torch.randperm(hidden_dim)[:mask_size]
+                    projected_image_embedding[b, s, zero_indices] = 0
             
             with torch.no_grad():
                 text_input_ids = self.tokenizer(
@@ -439,7 +449,8 @@ class Main():
 
 if __name__ == '__main__':
     # wandb 초기화 전에 GPU 설정 확인
-
+    
+    import torch
     print(f"Available GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
     print(f"Currently allocated: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
     
@@ -452,7 +463,7 @@ if __name__ == '__main__':
         wandb.init(
             project="Controlnet",
             config=vars(opt),
-            name=f"sd_image_adapter_cfg_ip_euler_adapter_zero_embedding_text_first_{opt.clip_embeddings_dim}_{opt.epoch}_{opt.lr}"
+            name=f"sd_image_adapter_cfg_ip_euler_adapter_zero_embedding_drop_text_first_{opt.clip_embeddings_dim}_{opt.epoch}_{opt.lr}"
         )
         for epoch in range(1, opt.epoch + 1):
             print('\nepoch', epoch)
