@@ -1,6 +1,5 @@
 *.safetensors
 *.bin
-*.pt
 *.pth
 *.ckpt
 *.pkl
