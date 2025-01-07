@@ -15,6 +15,9 @@
 *.gif
 *.bmp
 
+local_adapter/checkpoints/*/tokenizer/
+captions_ollama/*.json
+
 echo "wandb/"
 echo "dataset_crawl/images"
 echo "dataset_crawl/cropped_images"
