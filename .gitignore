@@ -9,3 +9,5 @@
 *.pkl
 
 echo "wandb/"
+echo "dataset_crawl/images"
+echo "dataset_crawl/cropped_images"
