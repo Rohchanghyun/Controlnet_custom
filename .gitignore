@@ -11,3 +11,4 @@
 echo "wandb/"
 echo "dataset_crawl/images"
 echo "dataset_crawl/cropped_images"
+echo "dataset_crawl/Bridging-Text-Spotting/ckpt"
