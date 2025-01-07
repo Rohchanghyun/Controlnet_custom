@@ -9,6 +9,11 @@
 *.ckpl
 *.pkl
 *.pyc
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
 
 echo "wandb/"
 echo "dataset_crawl/images"
