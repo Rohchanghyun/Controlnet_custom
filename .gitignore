@@ -1,4 +1,5 @@
 *.safetensors
+*.pt
 *.bin
 *.pth
 *.ckpt
@@ -7,8 +8,14 @@
 *.pthl
 *.ckpl
 *.pkl
+*.pyc
 
 echo "wandb/"
 echo "dataset_crawl/images"
 echo "dataset_crawl/cropped_images"
 echo "dataset_crawl/Bridging-Text-Spotting/ckpt"
+
+*.h5
+*.tar
+*.zip
+*.gz
