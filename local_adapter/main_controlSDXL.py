@@ -23,11 +23,12 @@ from diffusers import (
     DDPMScheduler,
     AutoencoderKL,
     EulerAncestralDiscreteScheduler,
-    StableDiffusionControlNetPipeline
+    StableDiffusionControlNetPipeline,
+    StableDiffusionXLPipeline
 )
 from opt import opt
 from data import Data
-from network import MGN, Image_adapter, Base_adapter
+from network import MGN, Image_adapter, Base_adapter, ImageTokenAdapter, VisualTokenProjector
 from loss import Loss
 from utils.get_optimizer import get_optimizer
 from utils.extract_feature import extract_feature
@@ -40,6 +41,10 @@ import torch.nn as nn
 import itertools
 import datetime
 import traceback
+import warnings
+import math
+
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # LoRA를 적용한 Custom Attention Processor
 class LoRAAttnProcessor(nn.Module):
@@ -147,13 +152,127 @@ class LoRAIPAttnProcessor(nn.Module):
 
         return hidden_states
 
+class CrossAttention(nn.Module):
+    def __init__(self, dim=768):
+        super().__init__()
+        
+    def forward(self, query, key_value):
+        # query: tensor of shape (batch_size, query_len, embed_dim)
+        # key, value: tensors of shape (batch_size, key_len, embed_dim)
+        print(f"query shape: {query.shape}")
+        print(f"key_value shape: {key_value.shape}")
+        scores = torch.matmul(query, key_value.transpose(-2, -1)) / (query.size(-1) ** 0.5)
+        print(f"scores shape: {scores.shape}")
+        attn_weights = torch.softmax(scores, dim=-1)
+        print(f"attn_weights shape: {attn_weights.shape}")
+        return torch.matmul(attn_weights, key_value)
+
+class ControlNetTrainer(nn.Module):
+    def __init__(self, opt):
+        super().__init__()
+        
+        # SDXL pipeline 초기화
+        self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            torch_dtype=torch.float32,
+        )
+        
+        # controlnet을 새로 초기화
+        self.controlnet = ControlNetModel(
+            in_channels=4,
+            down_block_types=("DownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "DownBlock2D", "DownBlock2D"),
+            block_out_channels=(320, 640, 1280, 1280, 1280, 1280),
+            layers_per_block=2,
+            cross_attention_dim=2048,
+            attention_head_dim=8,
+        ).to("cuda")
+        
+        self.opt = opt
+        self.device = torch.device('cuda')
+        
+        # pipeline의 noise_scheduler 사용
+        self.noise_scheduler = self.pipeline.scheduler
+
+    def _encode_prompt(self, prompt, device, num_images_per_prompt, do_classifier_free_guidance, negative_prompt):
+        batch_size = len(prompt) if isinstance(prompt, list) else 1
+
+        # pipeline의 tokenizer 사용
+        text_inputs = self.pipeline.tokenizer(
+            prompt,
+            padding="max_length",
+            max_length=self.pipeline.tokenizer.model_max_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+        text_input_ids = text_inputs.input_ids
+        
+        # pipeline의 text_encoder 사용
+        text_embeddings = self.pipeline.text_encoder(text_input_ids.to(device))[0]
+
+        if do_classifier_free_guidance:
+            uncond_tokens = [""] * batch_size if negative_prompt is None else negative_prompt
+            max_length = text_input_ids.shape[-1]
+            uncond_input = self.pipeline.tokenizer(
+                uncond_tokens,
+                padding="max_length",
+                max_length=max_length,
+                truncation=True,
+                return_tensors="pt",
+            )
+            uncond_embeddings = self.pipeline.text_encoder(uncond_input.input_ids.to(device))[0]
+            
+            text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
+
+        return text_embeddings
+
 class Main():
     def __init__(self, opt):
-        self.opt = opt
+        super().__init__()
         
-        # SD 1.5 모델 ID로 변경
-        self.model_id = "runwayml/stable-diffusion-v1-5"
-        self.controlnet_model_id = "lllyasviel/sd-controlnet-openpose"
+        # result_dir 초기화 추가
+        self.result_dir = os.path.join(opt.output_dir, datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+        os.makedirs(self.result_dir, exist_ok=True)
+        
+        print("\n=== 모델 초기화 시작 ===")
+        
+        # model_id 추가
+        self.model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+        
+        print("\n1. SDXL pipeline 초기화 중...")
+        self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            torch_dtype=torch.float32,
+        )
+        
+        print("\n2. ControlNet 초기화 중...")
+        self.controlnet = ControlNetModel(
+            in_channels=4,
+            down_block_types=("DownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "DownBlock2D", "DownBlock2D"),
+            block_out_channels=(320, 640, 1280, 1280, 1280, 1280),
+            layers_per_block=2,
+            cross_attention_dim=2048,
+            attention_head_dim=8,
+        ).to("cuda")
+        
+        print("\n4. 모델 컴포넌트 GPU 이동 중...")
+        print("- Text Encoder를 GPU로 이동")
+        self.text_encoder = self.pipeline.text_encoder.to("cuda")
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("- Text Encoder 2를 GPU로 이동")
+        self.text_encoder_2 = self.pipeline.text_encoder_2.to("cuda")
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        # tokenizer 참조
+        self.tokenizer = self.pipeline.tokenizer
+        self.tokenizer_2 = self.pipeline.tokenizer_2
+        
+        # VAE를 float32로 로드
+        vae = AutoencoderKL.from_pretrained(
+            self.model_id,
+            subfolder="vae",
+            torch_dtype=torch.float32
+        )
         
         # 스케줄러 설정
         self.noise_scheduler = EulerAncestralDiscreteScheduler.from_pretrained(
@@ -161,76 +280,111 @@ class Main():
             subfolder="scheduler",
         )
         
-        torch.cuda.set_device(0)
-        
-        # VAE를 float32로 로드
-        vae = AutoencoderKL.from_pretrained(
+        # ControlNet 파이프라인 설정 - 이 부분도 SDXL용으로 수정
+        self.pipeline = StableDiffusionXLControlNetPipeline.from_pretrained(
             self.model_id,
-            subfolder="vae",
-            torch_dtype=torch.float32  # float16 대신 float32 사용
-        )
-        
-        # ControlNet 파이프라인 설정
-        self.pipeline = StableDiffusionControlNetPipeline.from_pretrained(
-            self.model_id,
-            controlnet=ControlNetModel.from_pretrained(
-                self.controlnet_model_id,
-                torch_dtype=torch.float32  # float16 대신 float32 사용
-            ),
-            vae=vae,  # 명시적으로 float32 VAE 사용
+            controlnet=self.controlnet,
+            vae=vae,
             scheduler=self.noise_scheduler,
-            torch_dtype=torch.float32,  # 전체 파이프라인을 float32로 설정
+            torch_dtype=torch.float32,
             safety_checker=None,
             requires_safety_checker=False
         ).to('cuda')
         
-        # VAE의 스케일링 팩터 확인
-        print(f"VAE scaling factor: {self.pipeline.vae.config.scaling_factor}")
+        self.opt = opt
+        self.opt.batchsize = 1  # 배치 사이즈를 1로 줄임
         
-        # 결과 디렉토리 설정
-        self.result_dir = opt.output_dir
-        os.makedirs(self.result_dir, exist_ok=True)
+        print("1. CUDA 메모리 초기화 중...")
+        torch.cuda.empty_cache()
+        print(f"- 사용 가능한 GPU 메모리: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        print(f"- 현재 할당된 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("\n4. 메모리 최적화 설정 적용 중...")
+        self.pipeline.enable_attention_slicing()
+        self.pipeline.enable_vae_slicing()
+        print("- 메모리 최적화 설정 완료")
+        print(f"- 최종 GPU 메모리 사용량: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"- 남은 GPU 메모리: {(torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1e9:.2f} GB")
+        
+        print("\n=== 모델 초기화 완료 ===\n")
+        
+        self.device = torch.device('cuda')
+        
+        # Image Token Adapter와 Visual Token Projector 초기화
+        self.image_adapter = ImageTokenAdapter().to("cuda", dtype=torch.float16)
+        self.visual_projector = VisualTokenProjector().to("cuda", dtype=torch.float16)
 
     def train(self, epoch):
+        print("\n=== 학습 초기화 시작 ===")
+        print(f"현재 GPU 메모리 사용량: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("\n1. wandb 초기화 중...")
         wandb.init(
             project="controlnet-sticker",
             name=f"training_run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
             config={
                 "learning_rate": 1e-5,
-                "architecture": "ControlNet-SD1.5",
-                "dataset": "sticker-pose",
+                "architecture": "ControlNet-SDXL1.0-base",
+                "dataset": "token-sticker",
                 "epochs": epoch,
             }
         )
 
-        # 메이터 로더 초기화
+        print("\n2. 데이터 로더 초기화 중...")
         self.data = Data(self.opt)
+        print(f"- 데이터 로더 초기화 후 GPU 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
         
-        # 메모리 절약을 위한 설정
+        print("\n3. CUDA 메모리 정리 중...")
         torch.cuda.empty_cache()
         
-        # 모든 모델 컴포넌트를 GPU로 이동
+        print("\n4. 모델 컴포넌트 GPU 이동 중...")
+        print("- Text Encoder를 GPU로 이동")
         self.pipeline.text_encoder.to("cuda")
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("- Text Encoder 2를 GPU로 이동")
+        self.pipeline.text_encoder_2.to("cuda")
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("- VAE를 GPU로 이동")
         self.pipeline.vae.to("cuda")
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("- UNet을 GPU로 이동")
         self.pipeline.unet.to("cuda")
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("- ControlNet을 GPU로 이동")
         self.pipeline.controlnet.to("cuda")
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
         
-        # gradient checkpointing 활성화
+        print("\n5. 모델 설정 중...")
         self.pipeline.controlnet.enable_gradient_checkpointing()
-        
-        # 학습 모드로 설정
         self.pipeline.controlnet.train()
         self.pipeline.unet.requires_grad_(False)
         self.pipeline.vae.requires_grad_(False)
         self.pipeline.text_encoder.requires_grad_(False)
         
+        print("\n6. Adapter 초기화 중...")
+        print("- Image Token Adapter 초기화")
+        self.image_adapter = ImageTokenAdapter().to("cuda", dtype=torch.float16)
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("- Cross Attention 모듈 초기화")
+        self.cross_attn = CrossAttention(dim=768).to("cuda")  # CLIP용
+        self.cross_attn_laion = CrossAttention(dim=1280).to("cuda")  # LAION용
+        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
+        print("\n=== 학습 초기화 완료 ===")
+        print(f"최종 GPU 메모리 사용량: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"남은 GPU 메모리: {(torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1e9:.2f} GB\n")
+        
         optimizer = torch.optim.AdamW(
             self.pipeline.controlnet.parameters(), 
-            lr=5e-6,  # 1e-5에서 낮춤
-            weight_decay=1e-2  # 가중치 정규화 추가
+            lr=5e-6,
+            weight_decay=1e-2
         )
         
-        # 학습률 스케줄러 추가
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, 
             mode='min', 
@@ -239,79 +393,133 @@ class Main():
             min_lr=1e-6
         )
         
-        # 학습을 위한 스케줄러 설정
-        self.noise_scheduler = EulerAncestralDiscreteScheduler.from_pretrained(
-            self.model_id,
-            subfolder="scheduler",
-            num_train_timesteps=1000
-        )
+        # 노이즈 스케줄러 설정
         self.noise_scheduler.set_timesteps(1000)
         
-        # 이미지 저장 디렉토리 생성
+        # 이미지 저장 디렉토리
         image_save_dir = os.path.join(self.result_dir, 'generated_images')
         os.makedirs(image_save_dir, exist_ok=True)
         
-        for step, batch in enumerate(tqdm(self.data.sticker_pose_loader)):
+        for step, batch in enumerate(tqdm(self.data.token_sticker_loader)):
             with torch.amp.autocast('cuda'):
-                pose_images = batch["pose_images"].to("cuda", dtype=torch.float16)
-                target_images = batch["target_images"].to("cuda", dtype=torch.float16)
-                prompt = batch["prompt"]
+                # 데이터 로드
+                visual_tokens = batch["visual_tokens"].to("cuda")
+                visual_tokens = visual_tokens[:, :768, :]  # [batch, 768, 192]
                 
-                # 수정된 prompt encoding 방식
-                text_encoder_output = self.pipeline.text_encoder(
-                    self.pipeline.tokenizer(
-                        prompt,
+                sticker_image = batch["sticker_image"].to("cuda")
+                sketch_image = batch["sketch_image"].to("cuda")
+                
+                # 프롬프트 인코딩
+                text_encoder_output = self.text_encoder(
+                    self.tokenizer(
+                        "a photo of character sticker",
                         padding="max_length",
-                        max_length=self.pipeline.tokenizer.model_max_length,
+                        max_length=self.tokenizer.model_max_length,
                         truncation=True,
                         return_tensors="pt",
                     ).input_ids.to("cuda")
+                ).last_hidden_state  # [B, 77, 768]
+                
+                # LAION encoder 출력 - last_hidden_state를 명시적으로 가져옴
+                text_encoder_output_laion = self.text_encoder_2(
+                    self.tokenizer_2(
+                        "a photo of character sticker",
+                        padding="max_length",
+                        max_length=self.tokenizer_2.model_max_length,
+                        truncation=True,
+                        return_tensors="pt",
+                    ).input_ids.to("cuda")
+                ).last_hidden_state  # [B, 77, 1280]
+                
+                # visual tokens를 CLIP과 LAION 공간으로 projection
+                clip_tokens, laion_tokens = self.visual_projector(visual_tokens)
+                
+                # Image adapter로 sketch에서 토큰 생성
+                clip_adapted, laion_adapted = self.image_adapter(sketch_image)  # 각각 [B, 4, 768], [B, 4, 1280]
+                
+                # Cross Attention 적용
+                self.cross_attn = CrossAttention(dim=768).to("cuda")  # CLIP용
+                self.cross_attn_laion = CrossAttention(dim=1280).to("cuda")  # LAION용
+                
+                # CLIP 토큰들의 Cross Attention
+                clip_attended = self.cross_attn(
+                    query=clip_adapted,      # [B, 4, 768]
+                    key_value=clip_tokens    # [B, 192, 768] 
                 )
-                prompt_embeds = text_encoder_output[0]
                 
-                # VAE encoding
-                target_latents = self.pipeline.vae.encode(target_images).latent_dist.sample()
-                target_latents = target_latents * self.pipeline.vae.config.scaling_factor
+                # LAION 토큰들의 Cross Attention
+                laion_attended = self.cross_attn_laion(
+                    query=laion_adapted,     # [B, 4, 1280]
+                    key_value=laion_tokens   # [B, 192, 1280] 
+                )
+                print("============================================")
+                print(f"clip_attended shape: {clip_attended.shape}")
+                print(f"laion_attended shape: {laion_attended.shape}")
+                print(f"text_encoder_output shape: {text_encoder_output.shape}")
+                print(f"text_encoder_output_laion shape: {text_encoder_output_laion.shape}")
+                # 각각의 임베딩을 text encoder 출력과 결합
+                clip_embeds = torch.cat([text_encoder_output, clip_attended], dim=1)    # [B, 81, 768]
+                laion_embeds = torch.cat([text_encoder_output_laion, laion_attended], dim=1)  # [B, 77, 1280]
                 
-                # 노이즈 추가 (수정된 부분)
-                noise = torch.randn_like(target_latents)
-                # 타임스텝 선택 수정
+                # 최종 결합
+                combined_embeds = torch.cat([clip_embeds, laion_embeds], dim=-1)  # [B, 81, 2048]
+                
+                # sticker image를 latent로 변환
+                with torch.no_grad():
+                    latents = self.pipeline.vae.encode(sticker_image).latent_dist.sample()
+                    latents = latents * self.pipeline.vae.config.scaling_factor
+                
+                # timesteps 생성
                 timesteps = torch.randint(
                     0,
                     self.noise_scheduler.config.num_train_timesteps,
-                    (target_latents.shape[0],),
-                    device=target_latents.device
+                    (latents.shape[0],),
+                    device=latents.device
                 ).long()
                 
-                # 노이즈 추가
+                # 노이즈 생성 및 noisy latents 생성
+                noise = torch.randn_like(latents)
                 noisy_latents = self.noise_scheduler.add_noise(
-                    target_latents,
+                    latents,
                     noise,
                     timesteps
                 )
                 
-                # ControlNet 추론
+                # ControlNet에 sketch 이미지 입력
                 down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
                     noisy_latents,
                     timesteps,
-                    encoder_hidden_states=prompt_embeds,
-                    controlnet_cond=pose_images,
-                    return_dict=False
+                    encoder_hidden_states=combined_embeds,
+                    controlnet_cond=sketch_image,  # sketch 이미지를 조건으로 사용
+                    return_dict=False,
                 )
                 
-                # UNet 추론
+                # 추가 조건부 임베딩 준비
+                added_cond_kwargs = {
+                    "text_embeds": self.pipeline.text_encoder_2(
+                        self.tokenizer_2(
+                            "a photo of character sticker",
+                            padding="max_length",
+                            max_length=self.tokenizer_2.model_max_length,
+                            truncation=True,
+                            return_tensors="pt",
+                        ).input_ids.to("cuda")
+                    ).pooled_output,  # pooled output 사용
+                    "time_ids": torch.zeros(1, 6).to("cuda")  # default time embeddings
+                }
+                
+                # UNet에 추가 조건부 임베딩 전달
                 noise_pred = self.pipeline.unet(
                     noisy_latents,
                     timesteps,
-                    encoder_hidden_states=prompt_embeds,
-                    down_block_additional_residuals=down_block_res_samples,
-                    mid_block_additional_residual=mid_block_res_sample,
+                    encoder_hidden_states=combined_embeds,
+                    added_cond_kwargs=added_cond_kwargs,  # 추가
                 ).sample
                 
                 # 손실 계산
                 loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
                 
-            # Gradient Clipping 추가
+            # Gradient Clipping
             torch.nn.utils.clip_grad_norm_(self.pipeline.controlnet.parameters(), max_norm=1.0)
             
             optimizer.zero_grad()
@@ -324,31 +532,24 @@ class Main():
                     self.pipeline.controlnet.eval()
                     
                     with torch.no_grad():
-                        test_pose = pose_images[0:1].clone().float()
-                        test_prompt = prompt[0] if isinstance(prompt, list) else prompt
+                        test_tokens = visual_tokens[0:1].clone()
                         
-                        # 생성 시 더 많은 inference steps 사용
+                        # 이미지 생성
                         generated_images = self.pipeline(
-                            prompt=test_prompt,
-                            image=test_pose,
-                            num_inference_steps=50,  # 30에서 증가
+                            prompt="a photo of character sticker",
+                            image=test_tokens,
+                            num_inference_steps=50,
                             guidance_scale=7.5,
-                            negative_prompt="low quality, worst quality, bad anatomy",  # 네거티브 프롬프트 추가
+                            negative_prompt="low quality, worst quality, bad anatomy",
                         ).images[0]
                         
-                        # wandb 로깅에 타겟 이미지 추가
-                        target_img = target_images[0].cpu().float()
-                        target_img = (target_img * 0.5 + 0.5).clamp(0, 1)  # denormalize
-                        target_img = target_img.numpy().transpose(1, 2, 0)
-                        target_img = (target_img * 255).astype(np.uint8)
-                        
+                        # wandb 로깅
                         wandb.log({
                             "step": step,
                             "loss": loss.item(),
-                            "learning_rate": optimizer.param_groups[0]['lr'],  # 현재 학습률 로깅
-                            "generated_image": wandb.Image(generated_images, caption=f"Step {step}: {test_prompt}"),
-                            "pose_image": wandb.Image(pose_images, caption="Input Pose"),
-                            "target_image": wandb.Image(target_img, caption="Target Image"),
+                            "learning_rate": optimizer.param_groups[0]['lr'],
+                            "generated_image": wandb.Image(generated_images, caption=f"Step {step}"),
+                            "visual_tokens": wandb.Image(visual_tokens[0].cpu(), caption="Input Tokens"),
                         })
                     
                     self.pipeline.controlnet.train()
@@ -361,14 +562,12 @@ class Main():
                     print(traceback.format_exc())
                     continue
             
-            # 기본 loss 로깅 (매 스텝)
+            # 기본 loss 로깅
             wandb.log({"training_loss": loss.item()})
             
-            # 더 자주 캐시 비우기
-            if step % 5 == 0:  # 10에서 5로 변경
+            # 메모리 관리
+            if step % 5 == 0:
                 torch.cuda.empty_cache()
-            
-            # 로깅 및 체크포인트 저장 로직...
 
     def test(self, pose_image, target_image, prompt="a photo of character sticker", save_path=None):
         self.controlnet.eval()
@@ -499,9 +698,9 @@ if __name__ == '__main__':
     # opt 설정
     class Options:
         def __init__(self):
-            self.data_path = "/workspace/data/changhyun/dataset/character_emoticon_data"  # 실제 데이터 경로로 수정
-            self.output_dir = "/workspace/data/changhyun/projects/emoji_generation/output"  # 출력 경로
-            self.batchsize = 4
+            self.data_path = "/workspace/data/changhyun/dataset/"
+            self.output_dir = "/workspace/data/changhyun/projects/emoji_generation/output"
+            self.batchsize = 1  # 배치 사이즈 줄임
 
     opt = Options()
     main = Main(opt)

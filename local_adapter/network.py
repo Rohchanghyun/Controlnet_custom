@@ -431,3 +431,81 @@ class aligner_cls(nn.Module):
         )
         
         return output
+
+class ImageTokenAdapter(nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.cnn = nn.Sequential(
+            # (3, 512, 512) -> (32, 256, 256)
+            nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            
+            # (32, 256, 256) -> (64, 128, 128)
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            
+            # (64, 128, 128) -> (128, 64, 64)
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            
+            # (128, 64, 64) -> (256, 32, 32)
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        
+        # 두 개의 projection head
+        self.proj_clip = nn.Sequential(
+            nn.AdaptiveAvgPool2d((8, 8)),     # (256, 8, 8) -> 16384
+            nn.Flatten(),                      # 16384
+            nn.Linear(256 * 8 * 8, 2048),     # 16384 -> 2048 (근본있게)
+            nn.ReLU(inplace=True),
+            nn.Linear(2048, 768 * 4),         # 2048 -> (4, 768) for CLIP v1
+        )
+        
+        self.proj_laion = nn.Sequential(
+            nn.AdaptiveAvgPool2d((8, 8)),     # (256, 8, 8) -> 16384
+            nn.Flatten(),                      # 16384
+            nn.Linear(256 * 8 * 8, 2048),     # 16384 -> 2048 (근본있게)
+            nn.ReLU(inplace=True),
+            nn.Linear(2048, 1280 * 4),        # 2048 -> (4, 1280) for LAION CLIP
+        )
+
+    def forward(self, x):
+        x = self.cnn(x)
+        clip_tokens = self.proj_clip(x).view(-1, 4, 768)    # [B, 4, 768]
+        laion_tokens = self.proj_laion(x).view(-1, 4, 1280) # [B, 4, 1280]
+        return clip_tokens, laion_tokens
+
+class VisualTokenProjector(nn.Module):
+    """Project visual tokens into CLIP and LAION CLIP embedding spaces"""
+    def __init__(self, input_dim=768):
+        super().__init__()
+        
+        # CLIP projection (768 -> 768)
+        self.clip_proj = nn.Sequential(
+            nn.Linear(input_dim, 512),
+            nn.GELU(),
+            nn.Linear(512, 768),
+            nn.LayerNorm(768)
+        )
+        
+        # LAION CLIP projection (768 -> 1280)
+        self.laion_proj = nn.Sequential(
+            nn.Linear(input_dim, 768),
+            nn.GELU(),
+            nn.Linear(768, 1280),
+            nn.LayerNorm(1280)
+        )
+
+    def forward(self, visual_tokens):
+        # visual_tokens: [B, 768, 192]
+        # Transpose to [B, 192, 768] for easier processing
+        visual_tokens = visual_tokens.transpose(1, 2)  # [B, 192, 768]
+        
+        # Project to each embedding space
+        clip_embeddings = self.clip_proj(visual_tokens)    # [B, 192, 768]
+        laion_embeddings = self.laion_proj(visual_tokens)  # [B, 192, 1280]
+        
+        # 이제 transpose 하지 않고 바로 반환
+        return clip_embeddings, laion_embeddings  # [B, 192, 768], [B, 192, 1280]

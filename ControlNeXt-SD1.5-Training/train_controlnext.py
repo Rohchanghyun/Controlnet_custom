@@ -60,6 +60,7 @@ from pipeline.pipeline_controlnext import StableDiffusionControlNeXtPipeline
 from models.unet import UNet2DConditionModel
 from safetensors.torch import load_file, save_file
 from copy import deepcopy
+from network import ImageTokenAdapter
 
 
 if is_wandb_available():
@@ -972,6 +973,16 @@ def main(args):
         eps=args.adam_epsilon,
     )
 
+    # Image Token Adapter 초기화
+    image_adapter = ImageTokenAdapter().to(accelerator.device)
+    
+    # optimizer에 adapter 파라미터 추가
+    optimizer = torch.optim.AdamW(
+        list(controlnext.parameters()) + list(image_adapter.parameters()),
+        lr=args.learning_rate,
+        weight_decay=args.adam_weight_decay
+    )
+
     # train dataset, dataloader 정의
     # train_dataset = make_train_dataset(args, tokenizer, accelerator)
 
@@ -1108,9 +1119,20 @@ def main(args):
     image_logs = None
     for epoch in range(first_epoch, args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
-            with accelerator.accumulate(controlnext, unet):
+            with accelerator.accumulate(controlnext):
+                # visual tokens를 adapter를 통해 변환
+                visual_tokens = batch["pixel_values"].to(device=accelerator.device, dtype=weight_dtype)
+                adapted_tokens = image_adapter(visual_tokens)  # (batch_size, 4, 768)
+                
+                # 이후 ControlNeXt 입력으로 사용
+                controlnext_output = controlnext(
+                    adapted_tokens,
+                    timesteps,
+                    encoder_hidden_states=prompt_embeds
+                )
+
                 # Convert images to latent space
-                latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
+                latents = vae.encode(batch["conditioning_pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
 
                 # Sample noise that we'll add to the latents
