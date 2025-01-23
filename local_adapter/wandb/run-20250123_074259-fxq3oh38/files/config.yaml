@@ -1,0 +1,44 @@
+_wandb:
+    value:
+        cli_version: 0.19.4
+        m: []
+        python_version: 3.8.8
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 55
+                - 83
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 55
+                - 83
+            "3":
+                - 13
+                - 16
+                - 23
+                - 55
+            "4": 3.8.8
+            "5": 0.19.4
+            "6": 4.46.3
+            "8":
+                - 5
+            "12": 0.19.4
+            "13": linux-x86_64
+architecture:
+    value: ControlNet-SDXL1.0-base
+dataset:
+    value: token-sticker
+epochs:
+    value: 10
+learning_rate:
+    value: 1e-05

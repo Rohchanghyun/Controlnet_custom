@@ -1,0 +1,249 @@
+
+2. 데이터 로더 초기화 중...
+Loading data from: /workspace/data/changhyun/dataset/pose_attention
+Checking directories:
+Visual tokens dir: /workspace/data/changhyun/dataset/pose_attention/visual_tokens (exists: True)
+Sticker dir: /workspace/data/changhyun/dataset/pose_attention/text_removed_sticker (exists: True)
+Sketch dir: /workspace/data/changhyun/dataset/pose_attention/sketch (exists: True)
+Found 149813 token files
+Found 19190 sticker files
+Found 50889 sketch files
+Example sketch paths:
+ - /workspace/data/changhyun/dataset/pose_attention/sketch/n04482393/sketch_50.JPEG
+ - /workspace/data/changhyun/dataset/pose_attention/sketch/n04482393/sketch_49.JPEG
+ - /workspace/data/changhyun/dataset/pose_attention/sketch/n04482393/sketch_48.JPEG
+Dataset size: 19190 pairs
+Total sketch images available: 50889
+- 데이터 로더 초기화 후 GPU 메모리: 20.00 GB
+
+3. CUDA 메모리 정리 중...
+
+4. 모델 컴포넌트 GPU 이동 중...
+- Text Encoder를 GPU로 이동
+  현재 메모리: 20.00 GB
+- Text Encoder 2를 GPU로 이동
+  현재 메모리: 20.00 GB
+- VAE를 GPU로 이동
+  현재 메모리: 20.00 GB
+- UNet을 GPU로 이동
+  현재 메모리: 20.00 GB
+- ControlNet을 GPU로 이동
+  현재 메모리: 20.00 GB
+
+5. 모델 설정 중...
+
+6. Adapter 초기화 중...
+- Image Token Adapter 초기화
+  현재 메모리: 20.00 GB
+- Visual Token Projector 초기화
+  현재 메모리: 20.00 GB
+- Cross Attention 모듈 초기화
+  현재 메모리: 20.00 GB
+
+=== 학습 초기화 완료 ===
+최종 GPU 메모리 사용량: 20.00 GB
+남은 GPU 메모리: 31.01 GB
+  0%|                                                                                                                                                                      | 1/19190 [00:09<48:49:46,  9.16s/it]
+
+Error in generation: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 655, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 801, in forward
+    controlnet_cond = self.controlnet_cond_embedding(controlnet_cond)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 99, in forward
+    embedding = self.conv_in(conditioning)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 458, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 454, in _conv_forward
+    return F.conv2d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+
+Error in generation: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 655, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 801, in forward
+    controlnet_cond = self.controlnet_cond_embedding(controlnet_cond)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 99, in forward
+    embedding = self.conv_in(conditioning)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 458, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 454, in _conv_forward
+    return F.conv2d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+
+Error in generation: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 655, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 801, in forward
+    controlnet_cond = self.controlnet_cond_embedding(controlnet_cond)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 99, in forward
+    embedding = self.conv_in(conditioning)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 458, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 454, in _conv_forward
+    return F.conv2d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+
+Error in generation: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 655, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 801, in forward
+    controlnet_cond = self.controlnet_cond_embedding(controlnet_cond)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 99, in forward
+    embedding = self.conv_in(conditioning)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 458, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 454, in _conv_forward
+    return F.conv2d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+
+Error in generation: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 655, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 801, in forward
+    controlnet_cond = self.controlnet_cond_embedding(controlnet_cond)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 99, in forward
+    embedding = self.conv_in(conditioning)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 458, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 454, in _conv_forward
+    return F.conv2d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+
+Error in generation: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 655, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 801, in forward
+    controlnet_cond = self.controlnet_cond_embedding(controlnet_cond)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 99, in forward
+    embedding = self.conv_in(conditioning)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 458, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 454, in _conv_forward
+    return F.conv2d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [16, 3, 3, 3], expected input[2, 4, 512, 512] to have 3 channels, but got 4 channels instead
+Traceback (most recent call last):
+  File "/opt/conda/lib/python3.8/threading.py", line 932, in _bootstrap_inner
+    self.run()
+  File "/opt/conda/lib/python3.8/threading.py", line 870, in run
+    self._target(*self._args, **self._kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/utils/data/_utils/pin_memory.py", line 55, in _pin_memory_loop
+    do_one_step()
+  File "/opt/conda/lib/python3.8/site-packages/torch/utils/data/_utils/pin_memory.py", line 32, in do_one_step
+    r = in_queue.get(timeout=MP_STATUS_CHECK_INTERVAL)
+  File "/opt/conda/lib/python3.8/multiprocessing/queues.py", line 116, in get
+    return _ForkingPickler.loads(res)
+  File "/opt/conda/lib/python3.8/site-packages/torch/multiprocessing/reductions.py", line 496, in rebuild_storage_fd
+    fd = df.detach()
+  File "/opt/conda/lib/python3.8/multiprocessing/resource_sharer.py", line 57, in detach
+    with _resource_sharer.get_connection(self._id) as conn:
+  File "/opt/conda/lib/python3.8/multiprocessing/resource_sharer.py", line 87, in get_connection
+    c = Client(address, authkey=process.current_process().authkey)
+  File "/opt/conda/lib/python3.8/multiprocessing/connection.py", line 502, in Client
+    c = SocketClient(address)
+  File "/opt/conda/lib/python3.8/multiprocessing/connection.py", line 630, in SocketClient
+    s.connect(address)
+FileNotFoundError: [Errno 2] No such file or directory
+  0%|                                                                                                                                                                      | 6/19190 [00:13<12:05:28,  2.27s/it]
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 834, in <module>
+    main.train(epoch=10)  # 테스트 실행
+  File "main_controlSDXL.py", line 498, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 823, in forward
+    sample = self.mid_block(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/unets/unet_2d_blocks.py", line 883, in forward
+    hidden_states = self.resnets[0](hidden_states, temb)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/resnet.py", line 371, in forward
+    output_tensor = (input_tensor + hidden_states) / self.output_scale_factor
+KeyboardInterrupt

@@ -1,0 +1,656 @@
+
+2. 데이터 로더 초기화 중...
+Loading data from: /workspace/data/changhyun/dataset/pose_attention
+Checking directories:
+Visual tokens dir: /workspace/data/changhyun/dataset/pose_attention/visual_tokens (exists: True)
+Sticker dir: /workspace/data/changhyun/dataset/pose_attention/text_removed_sticker (exists: True)
+Sketch dir: /workspace/data/changhyun/dataset/pose_attention/sketch (exists: True)
+Found 149813 token files
+Found 19190 sticker files
+Found 50889 sketch files
+Example sketch paths:
+ - /workspace/data/changhyun/dataset/pose_attention/sketch/n04482393/sketch_50.JPEG
+ - /workspace/data/changhyun/dataset/pose_attention/sketch/n04482393/sketch_49.JPEG
+ - /workspace/data/changhyun/dataset/pose_attention/sketch/n04482393/sketch_48.JPEG
+Dataset size: 19190 pairs
+Total sketch images available: 50889
+- 데이터 로더 초기화 후 GPU 메모리: 20.00 GB
+
+3. CUDA 메모리 정리 중...
+
+4. 모델 컴포넌트 GPU 이동 중...
+- Text Encoder를 GPU로 이동
+  현재 메모리: 20.00 GB
+- Text Encoder 2를 GPU로 이동
+  현재 메모리: 20.00 GB
+- VAE를 GPU로 이동
+  현재 메모리: 20.00 GB
+- UNet을 GPU로 이동
+  현재 메모리: 20.00 GB
+- ControlNet을 GPU로 이동
+  현재 메모리: 20.00 GB
+
+5. 모델 설정 중...
+
+6. Adapter 초기화 중...
+- Image Token Adapter 초기화
+  현재 메모리: 20.00 GB
+- Visual Token Projector 초기화
+  현재 메모리: 20.00 GB
+- Cross Attention 모듈 초기화
+  현재 메모리: 20.00 GB
+
+=== 학습 초기화 완료 ===
+최종 GPU 메모리 사용량: 20.00 GB
+남은 GPU 메모리: 31.02 GB
+  0%|                                                                                                                                                                      | 2/19190 [00:10<38:04:56,  7.14s/it]
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+
+Error in generation: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 650, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 802, in forward
+    sample = sample + controlnet_cond
+RuntimeError: The size of tensor a (128) must match the size of tensor b (16) at non-singleton dimension 3
+Traceback (most recent call last):
+  File "main_controlSDXL.py", line 829, in <module>
+    main.train(epoch=10)  # 테스트 실행
+  File "main_controlSDXL.py", line 498, in train
+    down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/controlnets/controlnet.py", line 808, in forward
+    sample, res_samples = downsample_block(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/unets/unet_2d_blocks.py", line 1318, in forward
+    hidden_states = torch.utils.checkpoint.checkpoint(
+  File "/opt/conda/lib/python3.8/site-packages/torch/_compile.py", line 31, in inner
+    return disable_fn(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/_dynamo/eval_frame.py", line 600, in _fn
+    return fn(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/utils/checkpoint.py", line 488, in checkpoint
+    ret = function(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/unets/unet_2d_blocks.py", line 1313, in custom_forward
+    return module(*inputs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/diffusers/models/resnet.py", line 327, in forward
+    hidden_states = self.norm1(hidden_states)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/normalization.py", line 288, in forward
+    return F.group_norm(
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/functional.py", line 2606, in group_norm
+    return torch.group_norm(input, num_groups, weight, bias, eps, torch.backends.cudnn.enabled)
+  File "/opt/conda/lib/python3.8/site-packages/torch/utils/checkpoint.py", line 1099, in pack_hook
+    frame.x_metadatas.append(frame.metadata_fn(x))
+  File "/opt/conda/lib/python3.8/site-packages/torch/autograd/grad_mode.py", line 85, in __exit__
+    torch.set_grad_enabled(self.prev)
+  File "/opt/conda/lib/python3.8/site-packages/torch/autograd/grad_mode.py", line 185, in __init__
+    self.prev = torch.is_grad_enabled()
+KeyboardInterrupt

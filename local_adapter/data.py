@@ -58,7 +58,7 @@ class TokenStickerDataset(Dataset):
     def __init__(self, base_dir, transform=None):
         self.base_dir = Path(base_dir)
         self.transform = transform or transforms.Compose([
-            transforms.Resize((512, 512)),
+            transforms.Resize((768, 768)),
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5])
         ])
