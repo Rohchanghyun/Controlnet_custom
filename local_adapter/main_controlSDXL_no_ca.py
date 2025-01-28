@@ -29,7 +29,7 @@ from diffusers import (
 )
 from opt import opt
 from data import Data
-from network import MGN, Image_adapter, Base_adapter, ImageTokenAdapter, VisualTokenProjector
+from network import MGN, Image_adapter, Base_adapter, ImageTokenAdapter, VisualTokenProjector, TokenImageAdapter
 from loss import Loss
 from utils.get_optimizer import get_optimizer
 from utils.extract_feature import extract_feature
@@ -323,16 +323,35 @@ class Main():
         print("\n=== 모델 초기화 완료 ===\n")
         
         self.device = torch.device('cuda')
-        
-        # Image Token Adapter와 Visual Token Projector 초기화
-        self.image_adapter = ImageTokenAdapter().to("cuda", dtype=torch.float32)
-        self.visual_projector = VisualTokenProjector().to("cuda", dtype=torch.float32)
+
+        # TokenImageAdapter 추가
+        self.token_image_adapter = TokenImageAdapter().to("cuda", dtype=torch.float32)
 
         # __init__ 메소드에서
         self.pipeline = self.pipeline.to(dtype=torch.float32)
         self.controlnet = self.controlnet.to(dtype=torch.float32)
         self.text_encoder = self.text_encoder.to(dtype=torch.float32)
         self.text_encoder_2 = self.text_encoder_2.to(dtype=torch.float32)
+
+    def get_time_ids(self):
+        # SDXL에서 사용하는 time_ids 생성
+        original_size = (768, 768)  # 원본 이미지 크기
+        target_size = (768, 768)    # 타겟 이미지 크기
+        crops_coords_top_left = (0, 0)  # 크롭 좌표
+        
+        add_time_ids = torch.tensor([
+            original_size[0],        # original height
+            original_size[1],        # original width
+            target_size[0],          # target height
+            target_size[1],          # target width
+            crops_coords_top_left[0], # crop top
+            crops_coords_top_left[1], # crop left
+        ], dtype=torch.float32)
+        
+        # 배치 차원 추가하고 GPU로 이동
+        add_time_ids = add_time_ids.unsqueeze(0).to("cuda")
+        
+        return add_time_ids
 
     def train(self, epoch):
         print("\n=== 학습 초기화 시작 ===")
@@ -341,7 +360,7 @@ class Main():
         print("\n1. wandb 초기화 중...")
         wandb.init(
             project="controlnet-sticker",
-            name=f"training_run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            name=f"training_run_no_ca_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
             config={
                 "learning_rate": 1e-5,
                 "architecture": "ControlNet-SDXL1.0-base",
@@ -386,12 +405,10 @@ class Main():
         self.pipeline.text_encoder.requires_grad_(False)
         
         print("\n6. Adapter 초기화 중...")
-        print("- Image Token Adapter 초기화")
-        self.image_adapter = ImageTokenAdapter().to("cuda", dtype=torch.float32)
-        print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+
         
-        print("- Visual Token Projector 초기화")
-        self.visual_projector = VisualTokenProjector().to("cuda", dtype=torch.float32)
+        print("- TokenImageAdapter 초기화")
+        self.token_image_adapter = TokenImageAdapter().to("cuda", dtype=torch.float32)
         print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
         
         print("- Cross Attention 모듈 초기화")
@@ -405,8 +422,7 @@ class Main():
         
         optimizer = torch.optim.AdamW([
             {'params': self.pipeline.controlnet.parameters()},
-            {'params': self.image_adapter.parameters()},
-            {'params': self.visual_projector.parameters()}
+            {'params': self.token_image_adapter.parameters()}
         ], lr=5e-6, weight_decay=1e-2)
         
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -423,388 +439,176 @@ class Main():
         # Image 저장 디렉토리
         image_save_dir = os.path.join(self.result_dir, 'generated_images')
         os.makedirs(image_save_dir, exist_ok=True)
-        
-        # Gradient scaling 추가
-        scaler = torch.cuda.amp.GradScaler()
 
         for step, batch in enumerate(tqdm(self.data.token_sticker_loader)):
+            # 각 배치 시작 시 optimizer 초기화
             optimizer.zero_grad()
             
-            # 데이터를 float16으로 변환하고 visual_tokens를 768로 슬라이싱
-            visual_tokens = batch["visual_tokens"][:, :, :768].to("cuda", dtype=torch.float32)  # [B, 192, 768]로 슬라이싱
-            sticker_image = batch["sticker_image"].to("cuda", dtype=torch.float32)
+            # 데이터 준비
+            visual_tokens = batch["visual_tokens"][:, :, :768].to("cuda", dtype=torch.float32)
             sketch_image = batch["sketch_image"].to("cuda", dtype=torch.float32)
+            sticker_image = batch["sticker_image"].to("cuda", dtype=torch.float32)
             
-            with torch.cuda.amp.autocast():
-                # 프롬프트 인코딩
-                text_encoder_output = self.text_encoder(
-                    self.tokenizer(
-                        "a photo of character sticker",
-                        padding="max_length",
-                        max_length=self.tokenizer.model_max_length,
-                        truncation=True,
-                        return_tensors="pt",
-                    ).input_ids.to("cuda")
-                ).last_hidden_state  # [B, 77, 768]
-                
-                # LAION encoder에서 두 종류의 임베딩을 동시에 얻기
-                encoder_output = self.text_encoder_2(
-                    self.tokenizer_2(
-                        "a photo of character sticker",
-                        padding="max_length",
-                        max_length=self.tokenizer_2.model_max_length,
-                        truncation=True,
-                        return_tensors="pt",
-                    ).input_ids.to("cuda"),
-                    output_hidden_states=True,
-                )
-                
-                # hidden states는 sequence 임베딩용 [B, 77, 1280]
-                text_encoder_output_laion = encoder_output.last_hidden_state  
-                
-                # text_embeds는 pooled output 대신 사용 [B, 1280]
-                text_embeds = encoder_output.text_embeds  
-                
-                # visual tokens를 CLIP과 LAION 공간으로 projection
-                clip_tokens, laion_tokens = self.visual_projector(visual_tokens)
-                
-                # Image adapter로 sketch에서 토큰 생성
-                clip_adapted, laion_adapted = self.image_adapter(sketch_image)  # 각각 [B, 4, 768], [B, 4, 1280]
-                
-                # Cross Attention 적용
-                self.cross_attn = CrossAttention(dim=768).to("cuda", dtype=torch.float32)
-                self.cross_attn_laion = CrossAttention(dim=1280).to("cuda", dtype=torch.float32)
-                
-                # CLIP 토큰들의 Cross Attention
-                clip_attended = self.cross_attn(
-                    query=clip_adapted,      # [B, 4, 768]
-                    key_value=clip_tokens    # [B, 192, 768] 
-                )
-                
-                # LAION 토큰들의 Cross Attention
-                laion_attended = self.cross_attn_laion(
-                    query=laion_adapted,     # [B, 4, 1280]
-                    key_value=laion_tokens   # [B, 192, 1280] 
-                )
-                # print("============================================")
-                # print(f"clip_attended shape: {clip_attended.shape}")
-                # print(f"laion_attended shape: {laion_attended.shape}")
-                # print(f"text_encoder_output shape: {text_encoder_output.shape}")
-                # print(f"text_encoder_output_laion shape: {text_encoder_output_laion.shape}")
-                # 각각의 임베딩을 text encoder 출력과 결합
-                clip_embeds = torch.cat([text_encoder_output, clip_attended], dim=1)    # [B, 81, 768]
-                laion_embeds = torch.cat([text_encoder_output_laion, laion_attended], dim=1)  # [B, 77, 1280]
-                
-                # 최종 결합
-                combined_embeds = torch.cat([clip_embeds, laion_embeds], dim=-1)  # [B, 81, 2048] # 이게 prompt로 들어가는거같음
-                
-                # 랜덤 noise latents 생성
-                latents = torch.randn(
-                    (1, 4, 96, 96),
-                    device="cuda",
-                    dtype=torch.float32
-                )
-                
-                # timestep 생성
-                timesteps = self.noise_scheduler.timesteps
-                timestep = timesteps[random.randint(0, len(timesteps) - 1)]
-                timestep = torch.tensor([timestep], device="cuda", dtype=torch.float32)
-                
-                # 노이즈 생성 및 noisy latents 생성
-                noise = torch.randn_like(latents, dtype=torch.float32)
-                noisy_latents = self.noise_scheduler.add_noise(
-                    latents,
-                    noise,
-                    timestep  # 이제 1-d tensor
-                )
-                
-                # ControlNet에 sketch 이미지 입력
-                down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
-                    noisy_latents,
-                    timestep,
-                    encoder_hidden_states=combined_embeds,
-                    controlnet_cond=sticker_image,  # sketch가 아닌 sticker_image를 사용
-                    return_dict=False,
-                )
-                
-                # ControlNet 출력 상태 확인
-                print("\nControlNet 출력 상태:")
-                print(f"down_block_res_samples requires_grad: {[x.requires_grad for x in down_block_res_samples]}")
-                print(f"mid_block_res_sample requires_grad: {mid_block_res_sample.requires_grad}")
-                
-                # UNet에 전달
-                original_size = (768, 768)  # 768x768로 변경
-                crop_size = (768, 768)     # 768x768로 변경
-                target_size = (768, 768)   # 768x768로 변경
-                crop_coords = (0, 0)         # (x, y)
+            # 두 text encoder의 출력을 올바르게 결합
+            prompt_embeds = self.text_encoder(
+                self.tokenizer(
+                    "a photo of character sticker",
+                    padding="max_length",
+                    max_length=self.tokenizer.model_max_length,
+                    truncation=True,
+                    return_tensors="pt",
+                ).input_ids.to("cuda")
+            ).last_hidden_state
 
-                time_ids = torch.tensor([
-                    original_size[0],  # original height
-                    original_size[1],  # original width
-                    crop_size[0],     # crop height
-                    crop_size[1],     # crop width
-                    crop_coords[0],   # crop x
-                    crop_coords[1],   # crop y
-                ], dtype=torch.float32).unsqueeze(0).to("cuda")  # [1, 6]
-                
-                noise_pred = self.pipeline.unet(
-                    noisy_latents,
-                    timestep,
-                    encoder_hidden_states=combined_embeds,
-                    added_cond_kwargs={
-                        "text_embeds": text_embeds,
-                        "time_ids": time_ids
-                    },
-                ).sample
-                
-                # loss 계산 전 tensor 상태 확인
-                print(f"\nBefore loss calculation:")
-                print(f"noise_pred: requires_grad={noise_pred.requires_grad}, dtype={noise_pred.dtype}")
-                print(f"noise: requires_grad={noise.requires_grad}, dtype={noise.dtype}")
+            # negative prompt도 포함
+            negative_prompt_embeds = self.text_encoder(
+                self.tokenizer(
+                    "",  # empty negative prompt
+                    padding="max_length",
+                    max_length=self.tokenizer.model_max_length,
+                    truncation=True,
+                    return_tensors="pt",
+                ).input_ids.to("cuda")
+            ).last_hidden_state
 
-                # noise_pred와 noise의 dtype 불일치 해결
-                noise_pred = noise_pred.float()
-                noise = noise.float()
-                loss = F.mse_loss(noise_pred, noise, reduction="mean")
+            # Text encoder 2
+            encoder_output = self.text_encoder_2(
+                self.tokenizer_2(
+                    "a photo of character sticker",
+                    padding="max_length",
+                    max_length=self.tokenizer_2.model_max_length,
+                    truncation=True,
+                    return_tensors="pt",
+                ).input_ids.to("cuda"),
+                output_hidden_states=True,
+            )
 
-                # loss 계산 후 상태 확인
-                print(f"\nAfter loss calculation:")
-                print(f"Loss value: {loss.item()}")
-                print(f"Loss requires_grad: {loss.requires_grad}")
-                print(f"Loss grad_fn: {loss.grad_fn}")
-                if torch.isnan(loss):
-                    print("Warning: Loss is NaN!")
-                    print(f"noise_pred dtype: {noise_pred.dtype}")
-                    print(f"noise dtype: {noise.dtype}")
-                
-                # backward with scaler
-                scaler.scale(loss).backward()
-                
-                # gradient clipping 전에 unscale
-                if step % 5 == 0:
-                    scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.pipeline.controlnet.parameters(), max_norm=1.0)
-                    
-                    # optimizer step
-                    scaler.step(optimizer)
-                    scaler.update()
-                
-                # Learning rate scheduler
-                scheduler.step(loss)
+            negative_prompt_embeds_2 = self.text_encoder_2(
+                self.tokenizer_2(
+                    "",
+                    padding="max_length",
+                    max_length=self.tokenizer_2.model_max_length,
+                    truncation=True,
+                    return_tensors="pt",
+                ).input_ids.to("cuda"),
+                output_hidden_states=True,
+            )
+
+            # SDXL 형식으로 올바르게 결합
+            prompt_embeds = torch.cat([
+                torch.cat([negative_prompt_embeds, prompt_embeds], dim=0),
+                torch.cat([negative_prompt_embeds_2.hidden_states[-2], encoder_output.hidden_states[-2]], dim=0)
+            ], dim=-1)
+
+            # TokenImageAdapter를 사용하여 visual tokens와 sketch image 결합
+            adapted_image = self.token_image_adapter(visual_tokens, sketch_image)
             
-            # 매 100 스텝마다 이미지 생성 및 로깅
+            # 먼저 timestep 정의
+            timesteps = self.noise_scheduler.timesteps
+            timestep = timesteps[random.randint(0, len(timesteps) - 1)]
+            timestep = torch.tensor([timestep], device="cuda", dtype=torch.float32)
+
+            # sticker image를 VAE로 인코딩
+            latents = self.pipeline.vae.encode(sticker_image).latent_dist.sample()
+            latents = latents * self.pipeline.vae.config.scaling_factor
+            
+            # noise 추가
+            noise = torch.randn_like(latents)
+            noisy_latents = self.noise_scheduler.add_noise(latents, noise, timestep)
+            
+            # ControlNet forward pass
+            down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
+                noisy_latents,
+                timestep,
+                encoder_hidden_states=prompt_embeds,
+                controlnet_cond=adapted_image,
+                return_dict=False,
+            )
+            
+            # Text encoder 2의 출력 처리
+            text_embeds = encoder_output.text_embeds
+
+            # UNet에 전달
+            time_ids = self.get_time_ids()
+
+            noise_pred = self.pipeline.unet(
+                noisy_latents,
+                timestep,
+                encoder_hidden_states=prompt_embeds,
+                added_cond_kwargs={
+                    "text_embeds": text_embeds,
+                    "time_ids": time_ids
+                },
+            ).sample
+
+            # loss 계산
+            loss = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
+            
+            # loss가 valid한지 확인
+            if not torch.isfinite(loss):
+                print(f"Warning: Loss is {loss.item()}, skipping batch")
+                continue
+
+            # Backward pass
+            loss.backward()
+            
+            # 매 5 스텝마다 optimizer step
+            if (step + 1) % 5 == 0:
+                # gradient clipping
+                torch.nn.utils.clip_grad_norm_(
+                    itertools.chain(
+                        self.pipeline.controlnet.parameters(),
+                        self.token_image_adapter.parameters()
+                    ),
+                    max_norm=1.0
+                )
+                
+                optimizer.step()
+                optimizer.zero_grad()
+            
+            # Learning rate scheduler update
+            scheduler.step(loss)
+
+            # 로깅
             if step % 1000 == 0:
-                try:
-                    self.pipeline.controlnet.eval()
-                    self.image_adapter.eval()
-                    self.visual_projector.eval()
-                    
-                    with torch.no_grad():
-                        test_tokens = visual_tokens[0:1].clone().to(dtype=torch.float32)
-                        
-                        # 프롬프트 인코딩
-                        text_encoder_output = self.text_encoder(
-                            self.tokenizer(
-                                "a photo of character sticker",
-                                padding="max_length",
-                                max_length=self.tokenizer.model_max_length,
-                                truncation=True,
-                                return_tensors="pt",
-                            ).input_ids.to("cuda")
-                        ).last_hidden_state.to(dtype=torch.float32)
+                print(f"\nStep {step}:")
+                print(f"Loss: {loss.item():.4f}")
+                print(f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}")
+                print(f"Memory allocated: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+                
+                # 가중치 저장
+                checkpoint_dir = os.path.join(self.result_dir, 'checkpoints')
+                os.makedirs(checkpoint_dir, exist_ok=True)
+                
+                # ControlNet 저장
+                controlnet_path = os.path.join(checkpoint_dir, f'controlnet_step_{step}.pt')
+                torch.save(
+                    self.pipeline.controlnet.state_dict(),
+                    controlnet_path
+                )
+                print(f"ControlNet saved to: {controlnet_path}")
+                print(f"File exists: {os.path.exists(controlnet_path)}")
+                print(f"File size: {os.path.getsize(controlnet_path) / 1024 / 1024:.2f} MB")
+                
+                # TokenImageAdapter 저장
+                adapter_path = os.path.join(checkpoint_dir, f'token_image_adapter_step_{step}.pt')
+                torch.save(
+                    self.token_image_adapter.state_dict(),
+                    adapter_path
+                )
+                print(f"TokenImageAdapter saved to: {adapter_path}")
+                print(f"File exists: {os.path.exists(adapter_path)}")
+                print(f"File size: {os.path.getsize(adapter_path) / 1024 / 1024:.2f} MB")
+                
+                wandb.log({
+                    "step": step,
+                    "loss": loss.item(),
+                    "learning_rate": optimizer.param_groups[0]['lr'],
+                })
 
-                        encoder_output = self.text_encoder_2(
-                            self.tokenizer_2(
-                                "a photo of character sticker",
-                                padding="max_length",
-                                max_length=self.tokenizer_2.model_max_length,
-                                truncation=True,
-                                return_tensors="pt",
-                            ).input_ids.to("cuda"),
-                            output_hidden_states=True,
-                        )
-                        
-                        text_encoder_output_laion = encoder_output.last_hidden_state.to(dtype=torch.float32)
-                        text_embeds = encoder_output.text_embeds.to(dtype=torch.float32)
-
-                        # Visual tokens 처리
-                        clip_tokens, laion_tokens = self.visual_projector(test_tokens)
-                        clip_adapted, laion_adapted = self.image_adapter(sketch_image.to(dtype=torch.float32))
-
-                        # Cross Attention
-                        clip_attended = self.cross_attn(
-                            query=clip_adapted,
-                            key_value=clip_tokens
-                        )
-                        
-                        laion_attended = self.cross_attn_laion(
-                            query=laion_adapted,
-                            key_value=laion_tokens
-                        )
-
-                        # 임베딩 결합
-                        clip_embeds = torch.cat([text_encoder_output, clip_attended], dim=1)
-                        laion_embeds = torch.cat([text_encoder_output_laion, laion_attended], dim=1)
-                        combined_embeds = torch.cat([clip_embeds, laion_embeds], dim=-1).to(dtype=torch.float32)
-
-                        # 랜덤 noise latents 생성
-                        latents = torch.randn(
-                            (1, 4, 96, 96),
-                            device="cuda",
-                            dtype=torch.float32
-                        )
-
-                        # timestep 생성
-                        timesteps = self.noise_scheduler.timesteps
-                        timestep = timesteps[random.randint(0, len(timesteps) - 1)]
-                        timestep = torch.tensor([timestep], device="cuda", dtype=torch.float32)
-
-                        # 노이즈 생성 및 noisy latents 생성
-                        noise = torch.randn_like(latents, dtype=torch.float32)
-                        noisy_latents = self.noise_scheduler.add_noise(
-                            latents,
-                            noise,
-                            timestep
-                        )
-
-                        # ControlNet에 sketch 이미지 입력
-                        down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
-                            noisy_latents.to(dtype=torch.float32),
-                            timestep.to(dtype=torch.float32),
-                            encoder_hidden_states=combined_embeds.to(dtype=torch.float32),
-                            controlnet_cond=sticker_image.to(dtype=torch.float32),
-                            return_dict=False,
-                        )
-
-                        # UNet에 전달
-                        original_size = (768, 768)  # 768x768로 변경
-                        crop_size = (768, 768)     # 768x768로 변경
-                        target_size = (768, 768)   # 768x768로 변경
-                        crop_coords = (0, 0)
-
-                        time_ids = torch.tensor([
-                            original_size[0],
-                            original_size[1],
-                            crop_size[0],
-                            crop_size[1],
-                            crop_coords[0],
-                            crop_coords[1],
-                        ], dtype=torch.float32).unsqueeze(0).to("cuda")
-
-                        noise_pred = self.pipeline.unet(
-                            noisy_latents,
-                            timestep,
-                            encoder_hidden_states=combined_embeds,
-                            added_cond_kwargs={
-                                "text_embeds": text_embeds,
-                                "time_ids": time_ids
-                            },
-                        ).sample
-
-                        # VAE 디코딩 전 latents 처리 수정
-                        print("\nProcessing latents:")
-                        # 원본 latents 상태 확인
-                        print(f"Original latents: mean={latents.mean().item():.4f}, std={latents.std().item():.4f}")
-                        
-                        # 정규화 및 스케일링
-                        latents = (latents - latents.mean()) / latents.std() * 0.18215
-                        latents = torch.clamp(latents, -2.0, 2.0)  # 더 엄격한 클리핑
-                        print(f"Normalized latents: mean={latents.mean().item():.4f}, std={latents.std().item():.4f}")
-                        
-                        # VAE 디코딩
-                        try:
-                            torch.cuda.empty_cache()
-                            # float32로 통일
-                            latents = latents.to(dtype=torch.float32)
-                            
-                            # 디코딩 전 추가 체크
-                            print(f"Pre-decode latents range: ({latents.min().item():.4f}, {latents.max().item():.4f})")
-                            
-                            # 단계별 디코딩
-                            vae_output = self.pipeline.vae.decode(latents)
-                            vae_output = vae_output.sample
-                            print(f"Raw VAE output range: ({vae_output.min().item():.4f}, {vae_output.max().item():.4f})")
-                            
-                            # 엄격한 클리핑
-                            vae_output = torch.clamp(vae_output, -1.0, 1.0)
-                            print(f"Clipped VAE output range: ({vae_output.min().item():.4f}, {vae_output.max().item():.4f})")
-                            
-                            # 이미지 변환
-                            image = (vae_output / 2 + 0.5).clamp(0, 1)
-                            print(f"Final image tensor range: ({image.min().item():.4f}, {image.max().item():.4f})")
-                            
-                            # 메모리 정리
-                            torch.cuda.empty_cache()
-                            
-                        except Exception as e:
-                            print(f"VAE decoding error: {str(e)}")
-                            print(traceback.format_exc())
-                            continue
-                        
-                        # numpy 변환 및 이미지 저장
-                        image = image.cpu().permute(0, 2, 3, 1).float().numpy()
-                        image = (image * 255).round().astype(np.uint8)[0]
-                        
-                        # 최종 이미지 상태 확인
-                        print(f"Final numpy array shape: {image.shape}")
-                        print(f"Final numpy array range: ({image.min()}, {image.max()})")
-                        
-                        generated_images = Image.fromarray(image)
-
-                        # 모든 학습 모델 저장
-                        model_save_dir = os.path.join(self.result_dir, 'models')
-                        os.makedirs(model_save_dir, exist_ok=True)
-                        
-                        current_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                        model_save_path = os.path.join(model_save_dir, f'model_step_{step}_{current_time}.pt')
-                        
-                        # 세 모델의 상태 모두 저장
-                        torch.save({
-                            'step': step,
-                            'controlnet_state_dict': self.pipeline.controlnet.state_dict(),
-                            'image_adapter_state_dict': self.image_adapter.state_dict(),
-                            'visual_projector_state_dict': self.visual_projector.state_dict(),
-                            'optimizer_state_dict': optimizer.state_dict(),
-                            'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
-                            'loss': loss.item(),
-                        }, model_save_path)
-                        
-                        # wandb 로깅
-                        wandb.log({
-                            "step": step,
-                            "loss": loss.item(),
-                            "learning_rate": optimizer.param_groups[0]['lr'],
-                            "generated_image": wandb.Image(generated_images, caption=f"Step {step}"),
-                            "visual_tokens": wandb.Image(visual_tokens[0].cpu(), caption="Input Tokens"),
-                        })
-                        
-                        print(f"\nStep {step}:")
-                        print(f"- Model saved at: {model_save_path}")
-                        print(f"- Current loss: {loss.item():.4f}")
-                    
-                    # 다시 train 모드로 전환
-                    self.pipeline.controlnet.train()
-                    self.image_adapter.train()
-                    self.visual_projector.train()
-                    
-                except Exception as e:
-                    print(f"Error in generation: {str(e)}")
-                    print(traceback.format_exc())
-                    continue
-            
-            # 기본 loss 로깅
-            wandb.log({"training_loss": loss.item()})
-            
             # 메모리 관리
             if step % 5 == 0:
                 torch.cuda.empty_cache()
-
-            # Gradient 모니터링 추가 (디버깅용)
-            if step % 100 == 0:
-                for name, param in self.pipeline.controlnet.named_parameters():
-                    if param.grad is not None:
-                        grad_norm = param.grad.norm().item()
-                        print(f"{name} gradient norm: {grad_norm}")
 
     def test(self, pose_image, target_image, prompt="a photo of character sticker", save_path=None):
         self.controlnet.eval()

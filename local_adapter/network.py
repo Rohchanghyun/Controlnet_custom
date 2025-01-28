@@ -501,6 +501,7 @@ class VisualTokenProjector(nn.Module):
     def forward(self, visual_tokens):
         # visual_tokens: [B, 768, 192]
         # Transpose to [B, 192, 768] for easier processing
+        visual_tokens = visual_tokens[:, :768, :]
         visual_tokens = visual_tokens.transpose(1, 2)  # [B, 192, 768]
         
         # Project to each embedding space
@@ -509,3 +510,47 @@ class VisualTokenProjector(nn.Module):
         
         # 이제 transpose 하지 않고 바로 반환
         return clip_embeddings, laion_embeddings  # [B, 192, 768], [B, 192, 1280]
+
+class TokenImageAdapter(nn.Module):
+    """Adapter for combining visual tokens and sketch images"""
+    def __init__(self, token_dim=768, hidden_dim=1024):
+        super().__init__()
+        
+        # Projection layer for concatenated features
+        self.proj = nn.Sequential(
+            nn.Linear(960, hidden_dim),  # 960 = 192(token) + 768(image)
+            nn.GELU(),
+            nn.Linear(hidden_dim, 768),
+            nn.LayerNorm(768)
+        )
+        
+    def forward(self, visual_tokens, sketch_images):
+        """
+        Args:
+            visual_tokens: (B, 192, 768)
+            sketch_images: (B, 3, 768, 768)
+        Returns:
+            output: (B, 3, 768, 768)
+        """
+        B = visual_tokens.shape[0]
+        
+        # 1. Duplicate visual tokens for each channel
+        visual_tokens = visual_tokens.unsqueeze(1)  # (B, 1, 192, 768)
+        visual_tokens = visual_tokens.permute(0, 1, 3, 2)
+        visual_tokens = visual_tokens.expand(-1, 3, -1, -1)  # (B, 3, 192, 768)
+        
+        print("visual_tokens", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 785])
+        print("sketch_images", sketch_images.shape) # sketch_images torch.Size([1, 3, 768, 768])
+
+        visual_tokens = visual_tokens[:, :, :, :768]
+        # 2. Concatenate along the spatial dimension
+        print("visual_tokens after slicing", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 768])
+        combined = torch.cat([visual_tokens, sketch_images], dim=2)  # (B, 3, 960, 768)
+        
+        # 3. Project back to original spatial dimensions
+        # Reshape for linear projection while maintaining H,W order
+        combined = combined.permute(0, 1, 3, 2)  # (B, 3, 768, 960)
+        output = self.proj(combined)  # (B, 3, 768, 768)
+        output = output.permute(0, 1, 3, 2)  # (B, 3, 768, 768) - H,W 순서 복원
+        
+        return output
