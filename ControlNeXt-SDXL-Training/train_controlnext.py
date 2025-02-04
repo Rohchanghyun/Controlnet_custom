@@ -403,7 +403,7 @@ def parse_args(input_args=None):
         help=("Coordinate for (the height) to be included in the crop coordinate embeddings needed by SDXL UNet."),
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
+        "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
     )
     parser.add_argument("--num_train_epochs", type=int, default=25)
     parser.add_argument(
@@ -1214,15 +1214,15 @@ def main(args):
 
     # Scheduler and math around the number of training steps.
     # Check the PR https://github.com/huggingface/diffusers/pull/8312 for detailed explanation.
-    num_warmup_steps_for_scheduler = args.lr_warmup_steps * accelerator.num_processes
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+
     if args.max_train_steps is None:
-        len_train_dataloader_after_sharding = math.ceil(len(train_dataloader) / accelerator.num_processes)
-        num_update_steps_per_epoch = math.ceil(len_train_dataloader_after_sharding / args.gradient_accumulation_steps)
-        num_training_steps_for_scheduler = (
-            args.num_train_epochs * num_update_steps_per_epoch * accelerator.num_processes
-        )
+        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     else:
-        num_training_steps_for_scheduler = args.max_train_steps * accelerator.num_processes
+        args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
+
+    num_warmup_steps_for_scheduler = args.lr_warmup_steps * accelerator.num_processes
+    num_training_steps_for_scheduler = args.max_train_steps * accelerator.num_processes
 
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
@@ -1237,43 +1237,16 @@ def main(args):
     unet, controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         unet, controlnet, optimizer, train_dataloader, lr_scheduler
     )
-
-    patch_accelerator_for_fp16_training(accelerator)
-
-    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        if num_training_steps_for_scheduler != args.max_train_steps * accelerator.num_processes:
-            logger.warning(
-                f"The length of the 'train_dataloader' after 'accelerator.prepare' ({len(train_dataloader)}) does not match "
-                f"the expected length ({len_train_dataloader_after_sharding}) when the learning rate scheduler was created. "
-                f"This inconsistency may result in the learning rate scheduler not functioning properly."
-            )
-    # Afterwards we recalculate our number of training epochs
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
-
-    # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers initializes automatically on the main process.
-    if accelerator.is_main_process:
-        tracker_config = dict(vars(args))
-
-        # tensorboard cannot handle list types for config
-        tracker_config.pop("validation_prompt")
-        tracker_config.pop("validation_image")
-
-        accelerator.init_trackers(args.tracker_project_name, config=tracker_config)
     
-    def patch_accelerator_for_fp16_training(accelerator):
-        org_unscale_grads = accelerator.scaler._unscale_grads_
-
-        def _unscale_grads_replacer(optimizer, inv_scale, found_inf, allow_fp16):
-            return org_unscale_grads(optimizer, inv_scale, found_inf, True)
-
-        accelerator.scaler._unscale_grads_ = _unscale_grads_replacer
+    # 이 부분을 주석 처리 또는 제거
+    # def patch_accelerator_for_fp16_training(accelerator):
+    #     org_unscale_grads = accelerator.scaler._unscale_grads_
+    #     def _unscale_grads_replacer(optimizer, inv_scale, found_inf, allow_fp16):
+    #         return org_unscale_grads(optimizer, inv_scale, found_inf, True)
+    #     accelerator.scaler._unscale_grads_ = _unscale_grads_replacer
 
     if args.mixed_precision == "fp16":
-        patch_accelerator_for_fp16_training(accelerator)
+        patch_accelerator_for_fp16_training(accelerator)  # 외부 함수 사용
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
@@ -1317,10 +1290,9 @@ def main(args):
         initial_global_step = 0
 
     progress_bar = tqdm(
-        range(0, args.max_train_steps),
+        total=args.max_train_steps,
         initial=initial_global_step,
         desc="Steps",
-        # Only show the progress bar once on each machine.
         disable=not accelerator.is_local_main_process,
     )
     loss_recorder = LossRecorder(gamma=0.9)

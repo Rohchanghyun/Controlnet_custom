@@ -168,63 +168,6 @@ class CrossAttention(nn.Module):
         #print(f"attn_weights shape: {attn_weights.shape}")
         return torch.matmul(attn_weights, key_value)
 
-class ControlNetTrainer(nn.Module):
-    def __init__(self, opt):
-        super().__init__()
-        
-        # SDXL pipeline 초기화
-        self.pipeline = StableDiffusionXLPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-xl-base-1.0",
-            torch_dtype=torch.float32,
-        )
-        
-        # controlnet을 새로 초기화
-        self.controlnet = ControlNetModel(
-            in_channels=4,
-            down_block_types=("DownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "DownBlock2D", "DownBlock2D"),
-            block_out_channels=(320, 640, 1280, 1280, 1280, 1280),
-            layers_per_block=2,
-            cross_attention_dim=2048,
-            attention_head_dim=8,
-        ).to("cuda", dtype=torch.float32)
-        
-        self.opt = opt
-        self.device = torch.device('cuda')
-        
-        # pipeline의 noise_scheduler 사용
-        self.noise_scheduler = self.pipeline.scheduler
-
-    def _encode_prompt(self, prompt, device, num_images_per_prompt, do_classifier_free_guidance, negative_prompt):
-        batch_size = len(prompt) if isinstance(prompt, list) else 1
-
-        # pipeline의 tokenizer 사용
-        text_inputs = self.pipeline.tokenizer(
-            prompt,
-            padding="max_length",
-            max_length=self.pipeline.tokenizer.model_max_length,
-            truncation=True,
-            return_tensors="pt",
-        )
-        text_input_ids = text_inputs.input_ids
-        
-        # pipeline의 text_encoder 사용
-        text_embeddings = self.pipeline.text_encoder(text_input_ids.to(device))[0]
-
-        if do_classifier_free_guidance:
-            uncond_tokens = [""] * batch_size if negative_prompt is None else negative_prompt
-            max_length = text_input_ids.shape[-1]
-            uncond_input = self.pipeline.tokenizer(
-                uncond_tokens,
-                padding="max_length",
-                max_length=max_length,
-                truncation=True,
-                return_tensors="pt",
-            )
-            uncond_embeddings = self.pipeline.text_encoder(uncond_input.input_ids.to(device))[0]
-            
-            text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
-
-        return text_embeddings
 
 class Main():
     def __init__(self, opt):
@@ -238,34 +181,22 @@ class Main():
         
         # model_id 추가
         self.model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+        self.controlnet_model_id = "xinsir/controlnet-scribble-sdxl-1.0"
+        print("\n1. SDXL pipeline + ControlNet 초기화 중...")
+        self.pipeline = StableDiffusionXLControlNetPipeline.from_pretrained(
+            self.model_id,
+            controlnet=ControlNetModel.from_pretrained(
+                self.controlnet_model_id,
+                torch_dtype=torch.float32,
+                use_safetensors=True  # .bin 파일 사용 허용
+            ),
+            scheduler=self.noise_scheduler,
+            torch_dtype=torch.float32
+        ).to('cuda')
         
-        print("\n1. SDXL pipeline 초기화 중...")
-        self.pipeline = StableDiffusionXLPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-xl-base-1.0",
-            torch_dtype=torch.float32,
-        )
+
         
-        print("\n2. ControlNet 초기화 중...")
-        # Scribble ControlNet 로드
-        try:
-            self.controlnet = ControlNetModel.from_pretrained(
-                "diffusers/controlnet-scribble-sdxl-1.0",
-                torch_dtype=torch.float32
-            )
-            print("Scribble ControlNet 로드 성공")
-        except Exception as e:
-            print(f"Scribble ControlNet 로드 실패, 새로운 ControlNet 초기화: {str(e)}")
-            self.controlnet = ControlNetModel(
-                in_channels=4,
-                down_block_types=("DownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D", "DownBlock2D", "DownBlock2D"),
-                block_out_channels=(320, 640, 1280, 1280, 1280, 1280),
-                layers_per_block=2,
-                cross_attention_dim=2048,
-                attention_head_dim=8,
-            )
-        self.controlnet = self.controlnet.to("cuda", dtype=torch.float32)
-        
-        print("\n4. 모델 컴포넌트 GPU 이동 중...")
+        print("\n2. 모델 컴포넌트 GPU 이동 중...")
         print("- Text Encoder를 GPU로 이동")
         self.text_encoder = self.pipeline.text_encoder.to("cuda", dtype=torch.float32)
         print(f"  현재 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
@@ -293,7 +224,10 @@ class Main():
             "stabilityai/stable-diffusion-xl-base-1.0",
             subfolder="scheduler"
         )
-        
+        self.noise_scheduler_inference = EulerDiscreteScheduler.from_pretrained(
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            subfolder="scheduler"
+        )
         # ControlNet 파이프라인 설정
         self.pipeline = StableDiffusionXLControlNetPipeline.from_pretrained(
             self.model_id,
@@ -308,12 +242,12 @@ class Main():
         self.opt = opt
         self.opt.batchsize = 1  # 배치 사이즈를 1로 줄임
         
-        print("1. CUDA 메모리 초기화 중...")
+        print("4. CUDA 메모리 초기화 중...")
         torch.cuda.empty_cache()
         print(f"- 사용 가능한 GPU 메모리: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
         print(f"- 현재 할당된 메모리: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
         
-        print("\n4. 메모리 최적화 설정 적용 중...")
+        print("\n5. 메모리 최적화 설정 적용 중...")
         self.pipeline.enable_attention_slicing()
         self.pipeline.enable_vae_slicing()
         print("- 메모리 최적화 설정 완료")
@@ -435,6 +369,7 @@ class Main():
         
         # 노이즈 스케줄러 설정
         self.noise_scheduler.set_timesteps(1000)
+        self.noise_scheduler_inference.set_timesteps(num_inference_steps=50)  # 예: 50 steps
         
         # Image 저장 디렉토리
         image_save_dir = os.path.join(self.result_dir, 'generated_images')
@@ -448,7 +383,10 @@ class Main():
             visual_tokens = batch["visual_tokens"][:, :, :768].to("cuda", dtype=torch.float32)
             sketch_image = batch["sketch_image"].to("cuda", dtype=torch.float32)
             sticker_image = batch["sticker_image"].to("cuda", dtype=torch.float32)
-            
+
+            sketch_image = (sketch_image / 127.5) - 1.0  # [0,255] → [-1,1]
+            sticker_image = (sticker_image / 127.5) - 1.0  # [0,255] → [-1,1]
+
             # 두 text encoder의 출력을 올바르게 결합
             prompt_embeds = self.text_encoder(
                 self.tokenizer(
@@ -502,6 +440,8 @@ class Main():
 
             # TokenImageAdapter를 사용하여 visual tokens와 sketch image 결합
             adapted_image = self.token_image_adapter(visual_tokens, sketch_image)
+            #print("adapted_image:", adapted_image)  # None인지 확인
+            #print("adapted_image shape:", adapted_image.shape if adapted_image is not None else "None")
             
             # 먼저 timestep 정의
             timesteps = self.noise_scheduler.timesteps
@@ -516,29 +456,32 @@ class Main():
             noise = torch.randn_like(latents)
             noisy_latents = self.noise_scheduler.add_noise(latents, noise, timestep)
             
+            # Text encoder 2의 출력 처리
+            text_embeds = encoder_output.text_embeds
+
+            # UNet에 전달
+            time_ids = self.get_time_ids()
+            
+            added_cond_kwargs={
+                "text_embeds": text_embeds,
+                "time_ids": time_ids
+            }
+            
             # ControlNet forward pass
             down_block_res_samples, mid_block_res_sample = self.pipeline.controlnet(
                 noisy_latents,
                 timestep,
                 encoder_hidden_states=prompt_embeds,
                 controlnet_cond=adapted_image,
+                added_cond_kwargs=added_cond_kwargs,
                 return_dict=False,
             )
-            
-            # Text encoder 2의 출력 처리
-            text_embeds = encoder_output.text_embeds
-
-            # UNet에 전달
-            time_ids = self.get_time_ids()
 
             noise_pred = self.pipeline.unet(
                 noisy_latents,
                 timestep,
                 encoder_hidden_states=prompt_embeds,
-                added_cond_kwargs={
-                    "text_embeds": text_embeds,
-                    "time_ids": time_ids
-                },
+                added_cond_kwargs=added_cond_kwargs,
             ).sample
 
             # loss 계산
@@ -599,12 +542,77 @@ class Main():
                 print(f"TokenImageAdapter saved to: {adapter_path}")
                 print(f"File exists: {os.path.exists(adapter_path)}")
                 print(f"File size: {os.path.getsize(adapter_path) / 1024 / 1024:.2f} MB")
-                
-                wandb.log({
-                    "step": step,
-                    "loss": loss.item(),
-                    "learning_rate": optimizer.param_groups[0]['lr'],
-                })
+
+        
+                with torch.no_grad():
+                    print("sketch_image shape:", sketch_image.shape)
+                    latent = self.pipeline.vae.encode(sketch_image.to(dtype=torch.float32)).latent_dist.sample()
+                    latent = latent * self.pipeline.vae.config.scaling_factor  # 스케일링 적용
+
+                    noise = torch.randn_like(latent)
+                    noisy_latent = self.pipeline.scheduler.add_noise(latent, noise, timestep)
+
+                    adapted_image = self.token_image_adapter(visual_tokens, sketch_image).to("cuda")
+                    adapted_image = adapted_image.clamp(-1, 1)  # 명시적 클리핑
+
+                    # 프롬프트 인코딩
+                    prompt="a photo of character sticker"
+                    prompt_embeds, pooled_prompt_embeds = self.encode_prompt(prompt, "", "cuda")
+                    
+                    added_cond_kwargs = {
+                        "text_embeds": torch.zeros((2, 1280), device="cuda"),
+                        "time_ids": self.get_time_ids()
+                    }
+                    
+                    # # latents 크기를 64x64로 변경
+                    # latents = torch.randn(
+                    #     (1, self.pipeline.unet.config.in_channels, 96, 96),  # 128x128 -> 64x64
+                    #     device="cuda",
+                    # )
+                    
+                    # 노이즈 스케줄러 설정
+                    self.noise_scheduler_inference.set_timesteps(30)
+                    latents = latents * self.noise_scheduler_inference.init_noise_sigma
+                    
+                    # 디노이징 루프
+                    for t in self.noise_scheduler_inference.timesteps:
+                        # ControlNet으로부터 residual 얻기
+                        down_block_res_samples, mid_block_res_sample = self.controlnet(
+                            latents,
+                            t,
+                            encoder_hidden_states=prompt_embeds,
+                            controlnet_cond=adapted_image,
+                            added_cond_kwargs=added_cond_kwargs,
+                            return_dict=False,
+                        )
+                        
+
+                        noise_pred = self.pipeline.unet(
+                            latents,
+                            t,
+                            encoder_hidden_states=prompt_embeds,
+                            down_block_additional_residuals=down_block_res_samples,  # down block 무시
+                            mid_block_additional_residual=mid_block_res_sample,
+                            added_cond_kwargs=added_cond_kwargs,
+                        ).sample
+                        
+                        # 노이즈 제거 스텝
+                        latents = self.noise_scheduler_inference.step(noise_pred, t, latents).prev_sample
+                    
+                    # 이미지 디코딩
+                    image = self.pipeline.vae.decode(latents / self.pipeline.vae.config.scaling_factor).sample
+                    image = (image / 2 + 0.5).clamp(0, 1)
+                    image = image.permute(0, 2, 3, 1).cpu().numpy()[0]
+                    image = Image.fromarray((image * 255).astype(np.uint8))
+
+                    wandb.log({
+                        "step": step,
+                        "loss": loss.item(),
+                        "learning_rate": optimizer.param_groups[0]['lr'],
+                        "generated_image": wandb.Image(image, caption=f"Step {step}"),
+                        "input_sketch": wandb.Image(sketch_image[0], caption="Input Sketch"),
+                        "adapted_image": wandb.Image(adapted_image[0], caption="Adapted Image")
+                    })
 
             # 메모리 관리
             if step % 5 == 0:
@@ -627,6 +635,7 @@ class Main():
                 target_image = self.transform(target_image).unsqueeze(0).to("cuda")
             
             # 프롬프트 인코딩
+            prompt="a photo of character sticker"
             prompt_embeds, negative_embeds = self.encode_prompt(prompt, "", "cuda")
             
             # VAE를 통한 타겟 이미지의 latent 추출
@@ -662,9 +671,15 @@ class Main():
             
             # VAE로 이미지 디코딩
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
-            image = (image / 2 + 0.5).clamp(0, 1)
-            image = image.cpu().permute(0, 2, 3, 1).numpy()[0]
-            image = Image.fromarray((image * 255).astype(np.uint8))
+            print("decoded image shape:", image.shape)
+            decoded_image = (image / 2 + 0.5).clamp(0, 1)
+            decoded_image = decoded_image.cpu().permute(0, 2, 3, 1).float().numpy()
+
+            if decoded_image.shape[0] == 1:
+                decoded_image = decoded_image.squeeze(0)  # (1, H, W, C) -> (H, W, C)
+
+            decoded_image = (decoded_image * 255).astype(np.uint8)
+            decoded_image = Image.fromarray(decoded_image)
             
             # 이미지 저장
             if save_path:
@@ -673,48 +688,77 @@ class Main():
             return image
 
     def encode_prompt(self, prompt, negative_prompt, device):
-        if isinstance(prompt, list):
-            prompt = prompt[0]
-        if isinstance(negative_prompt, list):
-            negative_prompt = negative_prompt[0]
-
-        # Tokenize prompts
-        prompt_tokens = self.tokenizer(
+        # Text encoders 처리
+        text_inputs = self.tokenizer(
             prompt,
             padding="max_length",
             max_length=self.tokenizer.model_max_length,
             truncation=True,
             return_tensors="pt",
-        ).input_ids.to(device)
-
-        negative_tokens = self.tokenizer(
+        )
+        text_inputs_2 = self.tokenizer_2(
+            prompt,
+            padding="max_length",
+            max_length=self.tokenizer_2.model_max_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+        
+        negative_text_inputs = self.tokenizer(
             negative_prompt,
             padding="max_length",
             max_length=self.tokenizer.model_max_length,
             truncation=True,
             return_tensors="pt",
-        ).input_ids.to(device)
-
-        # Get prompt embeddings from text encoder
-        prompt_embeds = self.text_encoder(prompt_tokens)[0]
-        negative_embeds = self.text_encoder(negative_tokens)[0]
-
-        # Get pooled embeddings from text_encoder_2
-        prompt_embeds_2 = self.text_encoder_2(prompt_tokens, output_hidden_states=True)
-        negative_embeds_2 = self.text_encoder_2(negative_tokens, output_hidden_states=True)
-
-        # Concatenate embeddings
-        prompt_embeds = torch.cat([prompt_embeds, prompt_embeds_2.hidden_states[-2]], dim=-1)
-        negative_embeds = torch.cat([negative_embeds, negative_embeds_2.hidden_states[-2]], dim=-1)
-        prompt_embeds = torch.cat([negative_embeds, prompt_embeds])
-
-        # Get pooled embeddings
-        pooled_prompt_embeds = torch.cat([
-            negative_embeds_2.text_embeds,
-            prompt_embeds_2.text_embeds,
-        ])
-
-        return prompt_embeds, pooled_prompt_embeds
+        )
+        negative_text_inputs_2 = self.tokenizer_2(
+            negative_prompt,
+            padding="max_length",
+            max_length=self.tokenizer_2.model_max_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+        
+        text_inputs = text_inputs.to(device)
+        text_inputs_2 = text_inputs_2.to(device)
+        negative_text_inputs = negative_text_inputs.to(device)
+        negative_text_inputs_2 = negative_text_inputs_2.to(device)
+        
+        # 첫 번째 텍스트 인코더
+        prompt_embeds = self.text_encoder(
+            text_inputs.input_ids,
+            output_hidden_states=True,
+        )
+        negative_prompt_embeds = self.text_encoder(
+            negative_text_inputs.input_ids,
+            output_hidden_states=True,
+        )
+        
+        # 두 번째 텍스트 인코더
+        prompt_embeds_2 = self.text_encoder_2(
+            text_inputs_2.input_ids,
+            output_hidden_states=True,
+        )
+        negative_prompt_embeds_2 = self.text_encoder_2(
+            negative_text_inputs_2.input_ids,
+            output_hidden_states=True,
+        )
+        
+        # pooled 출력과 hidden states 사용
+        prompt_embeds = prompt_embeds.hidden_states[-2]
+        negative_prompt_embeds = negative_prompt_embeds.hidden_states[-2]
+        prompt_embeds_2 = prompt_embeds_2.hidden_states[-2]
+        negative_prompt_embeds_2 = negative_prompt_embeds_2.hidden_states[-2]
+        
+        # 임베딩 결합 (hidden states)
+        prompt_embeds = torch.cat([prompt_embeds, prompt_embeds_2], dim=-1)
+        negative_prompt_embeds = torch.cat([negative_prompt_embeds, negative_prompt_embeds_2], dim=-1)
+        
+        # 배치 차원 확장
+        prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
+        
+        # pooled_prompt_embeds는 필요 없으므로 None 반환
+        return prompt_embeds, None
 
     def __del__(self):
         # 학습 종료 시 wandb 종료

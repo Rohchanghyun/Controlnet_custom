@@ -16,11 +16,11 @@
 *.bmp
 *.json
 
-echo "wandb/"
-echo "dataset_crawl/images"
-echo "dataset_crawl/cropped_images"
-echo "dataset_crawl/Bridging-Text-Spotting/ckpt"
-
+wandb/
+dataset_crawl/images
+dataset_crawl/cropped_images
+dataset_crawl/Bridging-Text-Spotting/ckpt
+local_adapter/streamline dataset
 *.h5
 *.tar
 *.zip

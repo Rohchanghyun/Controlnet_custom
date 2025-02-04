@@ -539,12 +539,12 @@ class TokenImageAdapter(nn.Module):
         visual_tokens = visual_tokens.permute(0, 1, 3, 2)
         visual_tokens = visual_tokens.expand(-1, 3, -1, -1)  # (B, 3, 192, 768)
         
-        print("visual_tokens", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 785])
-        print("sketch_images", sketch_images.shape) # sketch_images torch.Size([1, 3, 768, 768])
+        #print("visual_tokens", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 785])
+        #print("sketch_images", sketch_images.shape) # sketch_images torch.Size([1, 3, 768, 768])
 
         visual_tokens = visual_tokens[:, :, :, :768]
         # 2. Concatenate along the spatial dimension
-        print("visual_tokens after slicing", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 768])
+        #print("visual_tokens after slicing", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 768])
         combined = torch.cat([visual_tokens, sketch_images], dim=2)  # (B, 3, 960, 768)
         
         # 3. Project back to original spatial dimensions
