@@ -20,6 +20,8 @@ wandb/
 dataset_crawl/images
 dataset_crawl/cropped_images
 dataset_crawl/Bridging-Text-Spotting/ckpt
+dataset_crawl/geckodriver-v0.34.0-linux64.tar.gz.1
+dataset_crawl/geckodriver-v0.34.0-linux64.tar.gz.2
 local_adapter/streamline dataset
 *.h5
 *.tar

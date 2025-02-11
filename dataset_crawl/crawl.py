@@ -7,6 +7,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 import re
+from selenium.webdriver.firefox.service import Service
 
 class CrawlingStats:
     def __init__(self):
@@ -29,13 +30,28 @@ def download_with_retry(url, max_retries=3, delay_between_retries=5):
             print(f"Attempt {attempt + 1} failed, retrying in {delay_between_retries} seconds...")
             time.sleep(delay_between_retries)
 
-# Firefox options 설정
+# Firefox 옵션 개선
 firefox_options = Options()
-firefox_options.add_argument('--headless')
+firefox_options.add_argument('--headless=new')  # 최신 헤드리스 모드
+firefox_options.add_argument('--disable-gpu')
+firefox_options.add_argument('--no-sandbox')
+firefox_options.add_argument('--disable-dev-shm-usage')
+firefox_options.set_preference('dom.ipc.processCount', 1)
 
-# Selenium 설정
-driver = webdriver.Firefox(options=firefox_options)
-driver.implicitly_wait(10)
+# 수정된 geckodriver 경로 (도커 환경에 맞게 변경)
+service = Service(
+    executable_path='/usr/bin/geckodriver',  # 도커에서 일반적인 설치 경로
+    log_path='geckodriver.log'
+)
+
+# 드라이버 초기화 방식 변경
+driver = webdriver.Firefox(
+    service=service,
+    options=firefox_options
+)
+
+# 암시적 대기 시간 조정
+driver.implicitly_wait(15)  # 10초 → 15초로 변경
 
 # 저장할 디렉토리 설정
 save_dir = '/workspace/data/changhyun/dataset/emoji_crawl'

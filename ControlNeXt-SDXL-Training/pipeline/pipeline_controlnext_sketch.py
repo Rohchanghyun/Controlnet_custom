@@ -283,7 +283,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusionXLControlNeXtPipeline(
+class StableDiffusionXLControlNeXtSketchPipeline(
     DiffusionPipeline,
     StableDiffusionMixin,
     FromSingleFileMixin,
@@ -369,7 +369,6 @@ class StableDiffusionXLControlNeXtPipeline(
         feature_extractor: CLIPImageProcessor = None,
         force_zeros_for_empty_prompt: bool = True,
         add_watermarker: Optional[bool] = None,
-        token_image_adapter: Optional[torch.nn.Module] = None,  # 추가된 파라미터
     ):
         super().__init__()
 
@@ -384,7 +383,6 @@ class StableDiffusionXLControlNeXtPipeline(
             image_encoder=image_encoder,
             feature_extractor=feature_extractor,
             controlnet=controlnet,
-            token_image_adapter=token_image_adapter,  # 어댑터 등록 추가
         )
         self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt)
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
@@ -1141,7 +1139,6 @@ class StableDiffusionXLControlNeXtPipeline(
         prompt: Union[str, List[str]] = None,
         prompt_2: Optional[Union[str, List[str]]] = None,
         controlnet_image: Optional[PipelineImageInput] = None,
-        visual_token: Optional[torch.Tensor] = None,  # 추가된 파라미터
         controlnet_scale: Optional[float] = 1.0,
         height: Optional[int] = None,
         width: Optional[int] = None,
@@ -1475,24 +1472,17 @@ class StableDiffusionXLControlNeXtPipeline(
                 self.do_classifier_free_guidance,
             )
 
-        # 7. Prepare controlnet_condition
-        # [수정] visual_token이 있을 경우 어댑터 적용
         if controlnet_image is not None and self.controlnet is not None:
-            if hasattr(self, 'token_image_adapter') and visual_token is not None:
-                # visual_token을 사용해 controlnet_image 생성
-                controlnet_image = self.token_image_adapter(visual_token, controlnet_image)
-            
             controlnet_image = self.prepare_image(
-                image=controlnet_image,
-                width=width,
-                height=height,
-                batch_size=batch_size * num_images_per_prompt,
-                num_images_per_prompt=num_images_per_prompt,
-                device=device,
-                dtype=self.controlnet.dtype,
+                controlnet_image,
+                width,
+                height,
+                batch_size,
+                num_images_per_prompt,
+                device,
+                self.controlnet.dtype,
                 do_classifier_free_guidance=self.do_classifier_free_guidance,
             )
-
             # 8. Denoising loop
         num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
 

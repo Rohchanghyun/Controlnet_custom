@@ -24,7 +24,9 @@ import random
 import shutil
 from contextlib import nullcontext
 from pathlib import Path
-
+import torchvision
+import torch.nn as nn
+from datetime import datetime
 import accelerate
 import numpy as np
 import torch
@@ -70,7 +72,7 @@ if is_torch_npu_available():
     torch.npu.config.allow_internal_format = False
 
 
-def log_validation(vae, unet, controlnet, args, accelerator, weight_dtype, step, is_final_validation=False):
+def log_validation(vae, unet, controlnet, adapter, args, accelerator, weight_dtype, step, is_final_validation=False):
     logger.info("Running validation... ")
 
     pipeline = StableDiffusionXLControlNeXtPipeline.from_pretrained(
@@ -78,6 +80,7 @@ def log_validation(vae, unet, controlnet, args, accelerator, weight_dtype, step,
         vae=vae,
         unet=unet,
         controlnet=controlnet,
+        token_image_adapter=adapter,
         safety_checker=None,
         revision=args.revision,
         variant=args.variant,
@@ -116,84 +119,135 @@ def log_validation(vae, unet, controlnet, args, accelerator, weight_dtype, step,
     else:
         autocast_ctx = torch.autocast(accelerator.device.type)
 
-    for validation_prompt, validation_image in zip(validation_prompts, validation_images):
-        validation_image = Image.open(validation_image).convert("RGB")
-        validation_image = validation_image.resize((args.resolution, args.resolution))
-
-        images = []
-
-        for _ in range(args.num_validation_images):
-            with autocast_ctx:
-                image = pipeline(
-                    prompt=validation_prompt,
-                    controlnet_image=validation_image,
-                    controlnet_scale_factor=args.controlnet_scale_factor,
-                    num_inference_steps=20,
-                    generator=generator,
-                    width=args.resolution,
-                    height=args.resolution,
-                ).images[0]
-            images.append(image)
-
-        image_logs.append(
-            {"validation_image": validation_image, "images": images, "validation_prompt": validation_prompt}
+    # [추가] 검증용 visual token 로드
+    if hasattr(args, 'validation_visual_token') and args.validation_visual_token:
+        # 단일 토큰 파일 사용
+        if not os.path.isfile(args.validation_visual_token):
+            raise FileNotFoundError(f"🚨 Validation visual token file not found: {args.validation_visual_token}")
+        visual_token = torch.load(args.validation_visual_token).to(accelerator.device)
+    else:
+        # 기존 방식 (이미지명 기반으로 토큰 검색)
+        image_name = os.path.splitext(os.path.basename(validation_images[0]))[0]
+        token_path = os.path.join(args.visual_token_dir, f"{image_name}.pt")
+        if not os.path.exists(token_path):
+            raise FileNotFoundError(f"🚨 Visual token not found: {token_path}")
+        visual_token = torch.load(token_path).to(accelerator.device)
+    
+    # 검증 이미지 로드 부분 수정
+    validation_image_path = validation_images[0]
+    
+    # 이미지 파일 존재 확인
+    if not os.path.exists(validation_image_path):
+        raise FileNotFoundError(f"Validation image not found: {validation_image_path}")
+    
+    # PIL.Image로 열기
+    validation_image = Image.open(validation_image_path).convert("RGB")
+    
+    # Tensor 변환 및 전처리
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((args.resolution, args.resolution)),
+    ])
+    validation_image_tensor = transform(validation_image).unsqueeze(0).to(accelerator.device, dtype=weight_dtype)
+    
+    # 어댑터를 통해 조건 생성
+    with torch.no_grad():
+        controlnet_condition = adapter(
+            visual_token.unsqueeze(0).to(dtype=weight_dtype),
+            validation_image_tensor  # 수정된 Tensor 사용
         )
+        
+    # 파이프라인에 조건 전달
+    generated_images = pipeline(
+        prompt=validation_prompts[0],
+        controlnet_image=controlnet_condition,
+        num_inference_steps=20,
+        generator=generator,
+        width=args.resolution,
+        height=args.resolution,
+    ).images
+    
+    if not generated_images:
+        logger.error("🚨 생성된 이미지가 없습니다!")
+        return None
+        
+    image_logs.append(
+        {"validation_image": validation_images[0], "images": generated_images, "validation_prompt": validation_prompts[0]}
+    )
 
-    sample_dir = os.path.join(args.output_dir, "samples", f"sample-{step}")
+    sample_dir = os.path.abspath(os.path.join(args.output_dir, "samples", f"sample-{step}"))
     os.makedirs(sample_dir, exist_ok=True)
-    tracker_key = "test" if is_final_validation else "validation"
-    for tracker in accelerator.trackers:
-        if tracker.name == "tensorboard":
-            for log in image_logs:
-                images = log["images"]
-                validation_prompt = log["validation_prompt"]
-                validation_image = log["validation_image"]
+    logger.info(f"🖼️ 이미지 저장 경로 생성 완료: {sample_dir}")
 
-                formatted_images = []
+    for idx, log in enumerate(image_logs):
+        validation_prompt = log["validation_prompt"]
+        validation_image = log["validation_image"]
+        images = log["images"]
+        
+        # [수정] 실제 이미지 객체 로드
+        if isinstance(validation_image, str):
+            validation_image = Image.open(validation_image).convert("RGB")
+        
+        # 파일명 생성 로직
+        safe_prompt = re.sub(r'[^a-zA-Z0-9_\-]', '_', validation_prompt)[:50]
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        pair_dir = os.path.join(sample_dir, f"{timestamp}_pair{idx}_{safe_prompt}")
+        
+        try:
+            os.makedirs(pair_dir, exist_ok=True)
+            logger.debug(f"📁 디렉토리 생성 시도: {pair_dir}")
+            
+            if not os.path.exists(pair_dir):
+                raise Exception(f"디렉토리 생성 실패: {pair_dir}")
 
-                formatted_images.append(np.asarray(validation_image))
+            # 원본 이미지 저장 (조건 이미지)
+            condition_path = os.path.join(pair_dir, "00_condition.png")
+            validation_image.save(condition_path)
+            logger.debug(f"🔖 조건 이미지 저장: {condition_path}")
 
-                for image in images:
-                    formatted_images.append(np.asarray(image))
+            # 생성 이미지 저장
+            for i, image in enumerate(images):
+                if image is None:
+                    logger.error(f"🚨 생성된 이미지 없음: {validation_prompt} - {i}")
+                    continue
+                    
+                img_path = os.path.join(pair_dir, f"{i+1:02d}_generated.png")
+                image.save(img_path)
+                logger.debug(f"💾 이미지 저장 성공: {img_path}")
 
-                formatted_images = np.stack(formatted_images)
+            # 그리드 이미지 생성
+            grid_images = [validation_image] + images
+            image_grid = make_image_grid(grid_images, 1, len(grid_images))
+            grid_path = os.path.join(pair_dir, "grid.png")
+            image_grid.save(grid_path)
+            logger.debug(f"🖼️ 그리드 이미지 저장: {grid_path}")
 
-                tracker.writer.add_images(validation_prompt, formatted_images, step, dataformats="NHWC")
-        elif tracker.name == "wandb":
-            formatted_images = []
+        except Exception as save_error:
+            logger.error(f"🔥 이미지 저장 중 에러: {str(save_error)}")
+            continue
 
-            for log in image_logs:
-                images = log["images"]
-                validation_prompt = log["validation_prompt"]
-                validation_image = log["validation_image"]
+    # 최종 확인
+    saved_count = sum([len(log["images"]) for log in image_logs])
+    logger.info(f"✅ 검증 이미지 저장 완료 | 총 {len(image_logs)}세트 | 이미지 {saved_count}장")
+    logger.info(f"📂 저장 위치: {sample_dir}")
 
-                formatted_images.append(wandb.Image(validation_image, caption="Controlnet conditioning"))
-
-                for image in images:
-                    image = wandb.Image(image, caption=validation_prompt)
-                    formatted_images.append(image)
-
-            tracker.log({tracker_key: formatted_images})
-        else:
-            logger.warning(f"image logging not implemented for {tracker.name}")
-
-    formatted_images = []
-    formatted_images.append(validation_image)
-    for i, image in enumerate(images):
-        formatted_images.append(image)
-        image.save(os.path.join(sample_dir, f"image-{i}_{step}.png"))
-    image_grid = make_image_grid(formatted_images, 1, len(formatted_images))
-    image_grid.save(os.path.join(sample_dir, f"grid_{step}.png"))
-    logger.info(f"{len(formatted_images)} validation images saved to {sample_dir}")
+    # 파일 시스템 동기화 (클라우드 저장소 대응)
+    if hasattr(os, 'sync'):
+        os.sync()
+        logger.debug("🔄 파일 시스템 동기화 완료")
 
     del pipeline
     gc.collect()
     torch.cuda.empty_cache()
 
+    # [5] 최종 저장 경로 확인
+    logger.info(f"📂 최종 저장 경로 존재 여부: {os.path.exists(sample_dir)}")
+    logger.info(f"📂 디렉토리 내용: {os.listdir(sample_dir)}")
+
     return image_logs
 
 
-def save_models(unet, controlnet, output_dir, args, orig_unet_sd=None):
+def save_models(unet, controlnet, adapter, output_dir, args, orig_unet_sd=None):
     os.makedirs(output_dir, exist_ok=True)
     unet_sd = unet.state_dict()
     pattern = re.compile(args.unet_trainable_param_pattern)
@@ -203,6 +257,7 @@ def save_models(unet, controlnet, output_dir, args, orig_unet_sd=None):
             unet_sd[k] = unet_sd[k].detach().cpu() - orig_unet_sd[k]
     save_file(unet_sd, os.path.join(output_dir, "unet_weight_increasements.safetensors"))
     save_file(controlnet.state_dict(), os.path.join(output_dir, "controlnet.safetensors"))
+    save_file(adapter.state_dict(), os.path.join(output_dir, "adapter.safetensors"))
 
 
 def import_model_class_from_model_name_or_path(
@@ -371,7 +426,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--controlnet_scale_factor",
         type=float,
-        default=0.4,
+        default=1.0,
         help=(
             "The scale factor for the controlnet. This is used to scale the controlnet output before adding it to the unet output."
             " For depth control, we recommend setting this to 1.0."
@@ -666,7 +721,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--validation_steps",
         type=int,
-        default=100,
+        default=1,
         help=(
             "Run validation every X steps. Validation consists of running the prompt"
             " `args.validation_prompt` multiple times: `args.num_validation_images`"
@@ -682,17 +737,41 @@ def parse_args(input_args=None):
             " more information see https://huggingface.co/docs/accelerate/v0.17.0/en/package_reference/accelerator#accelerate.Accelerator"
         ),
     )
+    parser.add_argument(
+        "--sticker_image_dir",
+        type=str,
+        default=None,
+        help="Path to directory containing sticker images",
+    )
+    parser.add_argument(
+        "--sketch_image_dir", 
+        type=str,
+        default=None,
+        help="Path to directory containing sketch images with subfolders",
+    )
+    parser.add_argument(
+        "--visual_token_dir",
+        type=str,
+        default=None,
+        help="Path to directory containing visual token .pt files",
+    )
+    parser.add_argument(
+        "--validation_visual_token",
+        type=str,
+        default=None,
+        help="Path to a single validation visual token",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
     else:
         args = parser.parse_args()
 
-    if args.dataset_name is None and args.train_data_dir is None:
-        raise ValueError("Specify either `--dataset_name` or `--train_data_dir`")
+    #if args.dataset_name is None and args.train_data_dir is None:
+    #    raise ValueError("Specify either `--dataset_name` or `--train_data_dir`")
 
-    if args.dataset_name is not None and args.train_data_dir is not None:
-        raise ValueError("Specify only one of `--dataset_name` or `--train_data_dir`")
+    #if args.dataset_name is not None and args.train_data_dir is not None:
+    #    raise ValueError("Specify only one of `--dataset_name` or `--train_data_dir`")
 
     if args.proportion_empty_prompts < 0 or args.proportion_empty_prompts > 1:
         raise ValueError("`--proportion_empty_prompts` must be in the range [0, 1].")
@@ -723,90 +802,159 @@ def parse_args(input_args=None):
     return args
 
 
-def get_train_dataset(args, accelerator):
-    # Get the datasets: you can either provide your own training and evaluation files (see below)
-    # or specify a Dataset from the hub (the dataset will be downloaded automatically from the datasets Hub).
+def get_train_dataset(args, accelerator, compute_embeddings_fn):
+    class PairedImageDataset(torch.utils.data.Dataset):
+        def __init__(self, sticker_dir, sketch_dir, transform=None):
+            # 스티커 파일 수집 (모든 이미지 허용)
+            sticker_files = {os.path.splitext(f)[0]: f 
+                           for f in os.listdir(sticker_dir) 
+                           if f.lower().endswith(('.png', '.jpg', '.jpeg'))}
+            
+            # 스케치 파일은 .png만 허용
+            sketch_files = {os.path.splitext(f)[0]: f 
+                          for f in os.listdir(sketch_dir) 
+                          if f.lower().endswith('.png')}  # .png만 필터링
+            
+            # 공통된 파일명 기반 쌍 구성
+            self.paired_names = list(sticker_files.keys() & sketch_files.keys())
+            if not self.paired_names:
+                raise ValueError(f"No matching pairs found. Check files in:\n"
+                                 f"Sticker dir: {sticker_dir}\n"
+                                 f"Sketch dir: {sketch_dir}")
+            
+            # 파일 경로 저장
+            self.sticker_paths = {k: os.path.join(sticker_dir, v) for k, v in sticker_files.items()}
+            self.sketch_paths = {k: os.path.join(sketch_dir, f"{k}.png") for k in self.paired_names}  # 확장자 강제 지정
+            
+            self.transform = transform
 
-    # In distributed training, the load_dataset function guarantees that only one local process can concurrently
-    # download the dataset.
-    while True:
-        try:
-            if args.dataset_name is not None:
-                # Downloading and loading a dataset from the hub.
-                dataset = load_dataset(
-                    args.dataset_name,
-                    args.dataset_config_name,
-                    cache_dir=args.cache_dir,
-                )
-            else:
-                if args.train_data_dir is not None:
-                    dataset = load_dataset(
-                        args.train_data_dir,
-                        cache_dir=args.cache_dir,
-                    )
-                # See more about loading custom images at
-                # https://huggingface.co/docs/datasets/v2.0.0/en/dataset_script
-            break
-        except Exception as e:
-            logger.error(f"Error loading dataset: {e}")
-            logger.error("Retry...")
-            continue
+        def __len__(self):
+            return len(self.paired_names)
+            
+        def __getitem__(self, idx):
+            base_name = self.paired_names[idx]
+            sticker_path = self.sticker_paths[base_name]
+            sketch_path = self.sketch_paths[base_name]  # .png 확장자 보장
+            
+            # 이미지 로드
+            sticker_img = Image.open(sticker_path).convert("RGB")
+            sketch_img = Image.open(sketch_path).convert("RGB")
+            
+            if self.transform:
+                sticker_img = self.transform(sticker_img)
+                sketch_img = self.transform(sketch_img)
+            
+            return sticker_img, sketch_img
 
-    # Preprocessing the datasets.
-    # We need to tokenize inputs and targets.
-    column_names = dataset["train"].column_names
+    # 스티커 데이터셋 생성
+    paired_dataset = PairedImageDataset(
+        sticker_dir=args.sticker_image_dir,
+        sketch_dir=args.sketch_image_dir,
+        transform=transforms.Compose([
+            transforms.Lambda(lambda img: img.convert("RGB")),
+            transforms.Resize(args.resolution),
+            transforms.CenterCrop(args.resolution),
+        ])
+    )
+    
+    # Load visual tokens
+    class TokenDataset(torch.utils.data.Dataset):
+        def __init__(self, root_dir):
+            self.token_files = [os.path.join(root_dir, f) for f in os.listdir(root_dir) if f.endswith('.pt')]
+            
+        def __len__(self):
+            return len(self.token_files)
+            
+        def __getitem__(self, idx):
+            return torch.load(self.token_files[idx])
+    
+    token_dataset = TokenDataset(args.visual_token_dir)
+    
+    # Create combined dataset
+    combined_dataset = CombinedDataset(
+        paired_dataset, 
+        token_dataset,
+        compute_embeddings_fn
+    )
+    
+    # Log dataset info
+    logger.info(f"Loaded datasets:\n"
+                f"Paired images: {len(paired_dataset)}\n"
+                f"Visual tokens: {len(token_dataset)}\n"
+                f"Final combined dataset size: {len(combined_dataset)}")
+    
+    # 샘플 쌍 로깅 (paired_dataset 사용)
+    logger.info(f"Sample pairs: {paired_dataset.paired_names[:5]}")
+    
+    return combined_dataset
 
-    # 6. Get the column names for input/target.
-    if args.image_column is None:
-        image_column = column_names[0]
-        logger.info(f"image column defaulting to {image_column}")
-    else:
-        image_column = args.image_column
-        if image_column not in column_names:
-            raise ValueError(
-                f"`--image_column` value '{args.image_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
-            )
 
-    if args.caption_column is None:
-        caption_column = column_names[1]
-        logger.info(f"caption column defaulting to {caption_column}")
-    else:
-        caption_column = args.caption_column
-        if caption_column not in column_names:
-            raise ValueError(
-                f"`--caption_column` value '{args.caption_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
-            )
+class CombinedDataset(torch.utils.data.Dataset):
+    def __init__(self, paired_dataset, token_dataset, compute_embeddings_fn):
+        self.paired_dataset = paired_dataset
+        self.token_dataset = token_dataset
+        self.fixed_caption = "a sticker image of character"
+        self.compute_embeddings = compute_embeddings_fn
 
-    if args.conditioning_image_column is None:
-        conditioning_image_column = column_names[2]
-        logger.info(f"conditioning image column defaulting to {conditioning_image_column}")
-    else:
-        conditioning_image_column = args.conditioning_image_column
-        if conditioning_image_column not in column_names:
-            raise ValueError(
-                f"`--conditioning_image_column` value '{args.conditioning_image_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
-            )
+        # 이미지 변환 파이프라인
+        self.image_transform = transforms.Compose([
+            transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(args.resolution),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5]),
+        ])
+        
+        self.conditioning_transform = transforms.Compose([
+            transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(args.resolution),
+            transforms.ToTensor(),
+        ])
 
-    with accelerator.main_process_first():
-        train_dataset = dataset["train"].shuffle(seed=args.seed)
-        if args.max_train_samples is not None:
-            train_dataset = train_dataset.select(range(args.max_train_samples))
-    return train_dataset
+        # 임베딩 사전 계산 (compute_embeddings_fn 사용)
+        self.precomputed_embeddings = self._precompute_embeddings()
+
+    def _precompute_embeddings(self):
+        # 가상의 배치 생성 (실제 데이터 대신 고정 캡션 사용)
+        dummy_batch = {
+            "text": [self.fixed_caption]  # 배치 형태 유지
+        }
+        
+        # compute_embeddings_fn 호출
+        embeddings = self.compute_embeddings(dummy_batch)
+        
+        return {
+            'prompt_embeds': embeddings['prompt_embeds'][0].cpu().clone(),
+            'text_embeds': embeddings['text_embeds'][0].cpu().clone(),
+            'time_ids': embeddings['time_ids'][0].cpu().clone()
+        }
+
+    def __len__(self):
+        return len(self.paired_dataset)
+        
+    def __getitem__(self, idx):
+        # 변환 적용
+        sticker_img, sketch_img = self.paired_dataset[idx]
+        visual_token = self.token_dataset[idx]
+
+        return {
+            'pixel_values': self.image_transform(sticker_img),
+            'conditioning_pixel_values': self.conditioning_transform(sketch_img),
+            'visual_token': visual_token,
+            'text': self.fixed_caption,
+            'prompt_embeds': self.precomputed_embeddings['prompt_embeds'],
+            'text_embeds': self.precomputed_embeddings['text_embeds'],
+            'time_ids': self.precomputed_embeddings['time_ids']
+        }
 
 
 # Adapted from pipelines.StableDiffusionXLPipeline.encode_prompt
 def encode_prompt(prompt_batch, text_encoders, tokenizers, proportion_empty_prompts, is_train=True):
     prompt_embeds_list = []
-
+    caption = "a sticker image of character"
     captions = []
-    for caption in prompt_batch:
-        if random.random() < proportion_empty_prompts:
-            captions.append("")
-        elif isinstance(caption, str):
-            captions.append(caption)
-        elif isinstance(caption, (list, np.ndarray)):
-            # take a random caption if there are multiple
-            captions.append(random.choice(caption) if is_train else caption[0])
+    for _ in prompt_batch:
+        captions.append(caption)
+
 
     with torch.no_grad():
         for tokenizer, text_encoder in zip(tokenizers, text_encoders):
@@ -835,42 +983,6 @@ def encode_prompt(prompt_batch, text_encoders, tokenizers, proportion_empty_prom
     return prompt_embeds, pooled_prompt_embeds
 
 
-def prepare_train_dataset(dataset, accelerator):
-    image_transforms = transforms.Compose(
-        [
-            transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(args.resolution),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
-        ]
-    )
-
-    conditioning_image_transforms = transforms.Compose(
-        [
-            transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(args.resolution),
-            transforms.ToTensor(),
-        ]
-    )
-
-    def preprocess_train(examples):
-        images = [image.convert("RGB") for image in examples[args.image_column]]
-        images = [image_transforms(image) for image in images]
-
-        conditioning_images = [image.convert("RGB") for image in examples[args.conditioning_image_column]]
-        conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
-
-        examples["pixel_values"] = images
-        examples["conditioning_pixel_values"] = conditioning_images
-
-        return examples
-
-    with accelerator.main_process_first():
-        dataset = dataset.with_transform(preprocess_train)
-
-    return dataset
-
-
 def collate_fn(examples):
     pixel_values = torch.stack([example["pixel_values"] for example in examples])
     pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
@@ -878,16 +990,20 @@ def collate_fn(examples):
     conditioning_pixel_values = torch.stack([example["conditioning_pixel_values"] for example in examples])
     conditioning_pixel_values = conditioning_pixel_values.to(memory_format=torch.contiguous_format).float()
 
+    #print(f"examples: {examples[0]}")
     prompt_ids = torch.stack([torch.tensor(example["prompt_embeds"]) for example in examples])
 
     add_text_embeds = torch.stack([torch.tensor(example["text_embeds"]) for example in examples])
     add_time_ids = torch.stack([torch.tensor(example["time_ids"]) for example in examples])
+
+    visual_token = torch.stack([torch.tensor(example["visual_token"]) for example in examples])
 
     return {
         "pixel_values": pixel_values,
         "conditioning_pixel_values": conditioning_pixel_values,
         "prompt_ids": prompt_ids,
         "unet_added_conditions": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
+        "visual_token": visual_token,
     }
 
 
@@ -898,6 +1014,46 @@ def patch_accelerator_for_fp16_training(accelerator):
         return org_unscale_grads(optimizer, inv_scale, found_inf, True)
 
     accelerator.scaler._unscale_grads_ = _unscale_grads_replacer
+
+
+def debug_dataloader_samples(dataloader, output_dir="debug_dataloader", num_batches=3):
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for batch_idx, batch in enumerate(dataloader):
+        if batch_idx >= num_batches:
+            break
+            
+        # Convert tensors to numpy arrays
+        stickers = batch['pixel_values'].cpu().numpy()
+        sketches = batch['conditioning_pixel_values'].cpu().numpy()
+        tokens = batch['unet_added_conditions']['text_embeds'].cpu().numpy()
+        
+        # Save samples from each batch
+        for sample_idx in range(stickers.shape[0]):
+            # Save sticker image
+            sticker_img = (stickers[sample_idx].transpose(1, 2, 0) * 255).astype(np.uint8)
+            Image.fromarray(sticker_img).save(
+                os.path.join(output_dir, f"batch_{batch_idx}_sample_{sample_idx}_sticker.png")
+            )
+            
+            # Save sketch image
+            sketch_img = (sketches[sample_idx].transpose(1, 2, 0) * 255).astype(np.uint8)
+            Image.fromarray(sketch_img).save(
+                os.path.join(output_dir, f"batch_{batch_idx}_sample_{sample_idx}_sketch.png")
+            )
+            
+            # Save token info
+            np.savez(
+                os.path.join(output_dir, f"batch_{batch_idx}_sample_{sample_idx}_token.npz"),
+                token=tokens[sample_idx]
+            )
+
+        logger.info(f"Batch {batch_idx} - Shapes: "
+                    f"Stickers: {stickers.shape}, "
+                    f"Sketches: {sketches.shape}, "
+                    f"Tokens: {tokens.shape}")
+        
+    logger.info(f"Saved dataloader debug samples to {output_dir}")
 
 
 def main(args):
@@ -1110,12 +1266,7 @@ def main(args):
     else:
         raise ValueError(f"Optimizer type {args.optimizer_type} not supported.")
 
-    # Optimizer creation
-    controlnet.train()
-    controlnet.requires_grad_(True)
-    params_to_optimize = [{'params': list(controlnet.parameters()), 'lr': args.learning_rate_controlnet}]
-    logger.info(f"Number of trainable parameters in controlnet: {sum(p.numel() for p in controlnet.parameters() if p.requires_grad)}")
-
+    # 1. Define unet_params
     unet.train()
     unet.requires_grad_(True)
     unet_params = []
@@ -1127,7 +1278,62 @@ def main(args):
         else:
             param.requires_grad = False
     logger.info(f"Number of trainable parameters in unet: {sum(p.numel() for p in unet.parameters() if p.requires_grad)}")
-    params_to_optimize.append({'params': unet_params, 'lr': args.learning_rate})
+
+
+    class TokenImageAdapter(nn.Module):
+
+        def __init__(self, token_dim=768, hidden_dim=1024):
+            super().__init__()
+            
+            # Projection layer for concatenated features
+            self.proj = nn.Sequential(
+                nn.Linear(960, hidden_dim),  # 960 = 192(token) + 768(image)
+                nn.GELU(),
+                nn.Linear(hidden_dim, 768),
+                nn.LayerNorm(768)
+            )
+            
+        def forward(self, visual_tokens, sketch_images):
+            """
+            Args:
+                visual_tokens: (B, 785, 192)
+                sketch_images: (B, 3, 768, 768)
+            Returns:
+                output: (B, 3, 768, 768)
+            """
+            B = visual_tokens.shape[0]
+            
+            # 1. Duplicate visual tokens for each channel
+            visual_tokens = visual_tokens.unsqueeze(1)  # (B, 1, 785, 192)
+            visual_tokens = visual_tokens.permute(0, 1, 3, 2)
+            visual_tokens = visual_tokens.expand(-1, 3, -1, -1)  # (B, 3, 192, 785)
+            
+            #print("visual_tokens", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 785])
+            #print("sketch_images", sketch_images.shape) # sketch_images torch.Size([1, 3, 768, 768])
+
+            visual_tokens = visual_tokens[:, :, :, :768]
+            # 2. Concatenate along the spatial dimension
+            #print("visual_tokens after slicing", visual_tokens.shape) # visual_tokens torch.Size([1, 3, 192, 768])
+            combined = torch.cat([visual_tokens, sketch_images], dim=2)  # (B, 3, 960, 768)
+            
+            # 3. Project back to original spatial dimensions
+            # Reshape for linear projection while maintaining H,W order
+            combined = combined.permute(0, 1, 3, 2)  # (B, 3, 768, 960)
+            output = self.proj(combined)  # (B, 3, 768, 768)
+            output = output.permute(0, 1, 3, 2)  # (B, 3, 768, 768) - H,W 순서 복원
+            
+            return output
+    # 1. 어댑터 먼저 생성
+    token_image_adapter = TokenImageAdapter().to(accelerator.device)
+
+    # 2. 이후 옵티마이저 파라미터 설정
+    params_to_optimize = [
+        {'params': list(controlnet.parameters()), 'lr': args.learning_rate_controlnet},
+        {'params': unet_params, 'lr': args.learning_rate},
+        {'params': token_image_adapter.parameters(), 'lr': args.learning_rate_controlnet}  # ✅ 이제 정상 참조
+    ]
+
+    # 3. Create optimizer
     optimizer = optimizer_class(
         params_to_optimize,
         lr=args.learning_rate,
@@ -1182,28 +1388,23 @@ def main(args):
     # from memory.
     text_encoders = [text_encoder_one, text_encoder_two]
     tokenizers = [tokenizer_one, tokenizer_two]
-    train_dataset = get_train_dataset(args, accelerator)
+    
+    # compute_embeddings_fn 생성
     compute_embeddings_fn = functools.partial(
         compute_embeddings,
         text_encoders=text_encoders,
         tokenizers=tokenizers,
         proportion_empty_prompts=args.proportion_empty_prompts,
     )
-    with accelerator.main_process_first():
-        from datasets.fingerprint import Hasher
-
-        # fingerprint used by the cache for the other processes to load the result
-        # details: https://github.com/huggingface/diffusers/pull/4038#discussion_r1266078401
-        new_fingerprint = Hasher.hash(args)
-        train_dataset = train_dataset.map(compute_embeddings_fn, batched=True, new_fingerprint=new_fingerprint)
+    
+    # 데이터셋 생성 시 compute_embeddings_fn 전달
+    train_dataset = get_train_dataset(args, accelerator, compute_embeddings_fn)
 
     del text_encoders, tokenizers
     gc.collect()
     torch.cuda.empty_cache()
 
     # Then get the training dataset ready to be passed to the dataloader.
-    train_dataset = prepare_train_dataset(train_dataset, accelerator)
-
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         shuffle=True,
@@ -1211,6 +1412,24 @@ def main(args):
         batch_size=args.train_batch_size,
         num_workers=args.dataloader_num_workers,
     )
+
+    # Debug: Check dataloader output
+    if accelerator.is_main_process:
+        logger.info("Verifying dataloader output...")
+        debug_dataloader_samples(train_dataloader)
+        
+        # Additional tensor checks
+        sample_batch = next(iter(train_dataloader))
+        logger.info("\nDataloader batch structure:")
+        for key, value in sample_batch.items():
+            if isinstance(value, dict):
+                for subkey, subvalue in value.items():
+                    logger.info(f"  {key}.{subkey}: {type(subvalue)}, shape: {subvalue.shape if hasattr(subvalue, 'shape') else None}")
+            else:
+                logger.info(f"  {key}: {type(value)}, shape: {value.shape if hasattr(value, 'shape') else None}")
+                
+        logger.info(f"Sticker value range: {torch.min(sample_batch['pixel_values'])} - {torch.max(sample_batch['pixel_values'])}")
+        logger.info(f"Sketch value range: {torch.min(sample_batch['conditioning_pixel_values'])} - {torch.max(sample_batch['conditioning_pixel_values'])}")
 
     # Scheduler and math around the number of training steps.
     # Check the PR https://github.com/huggingface/diffusers/pull/8312 for detailed explanation.
@@ -1233,9 +1452,15 @@ def main(args):
         power=args.lr_power,
     )
 
+
+
+
+
+
+
     # Prepare everything with our `accelerator`.
-    unet, controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        unet, controlnet, optimizer, train_dataloader, lr_scheduler
+    unet, controlnet, token_image_adapter, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        unet, controlnet, token_image_adapter, optimizer, train_dataloader, lr_scheduler
     )
     
     # 이 부분을 주석 처리 또는 제거
@@ -1297,6 +1522,8 @@ def main(args):
     )
     loss_recorder = LossRecorder(gamma=0.9)
 
+
+
     image_logs = None
     for epoch in range(first_epoch, args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
@@ -1325,8 +1552,13 @@ def main(args):
 
                 # ControlNet conditioning.
                 controlnet_image = batch["conditioning_pixel_values"].to(accelerator.device, dtype=controlnet.dtype)
+                print(f"controlnet_image: {controlnet_image.shape}") #16,3,768,768
+                visual_token = batch["visual_token"].to(accelerator.device, dtype=controlnet.dtype)
+                print(f"visual_token: {visual_token.shape}") #16, 785, 192
+
+                controlnet_condition = token_image_adapter(visual_token, controlnet_image)
                 controls = controlnet(
-                    controlnet_image,
+                    controlnet_condition,
                     timesteps,
                 )
                 controls['scale'] *= args.controlnet_scale_factor
@@ -1393,8 +1625,10 @@ def main(args):
                         save_models(
                             accelerator.unwrap_model(unet),
                             accelerator.unwrap_model(controlnet),
+                            accelerator.unwrap_model(token_image_adapter),
                             save_path,
                             args,
+                            orig_unet_sd if args.save_weights_increaments else None,
                         )
                         logger.info(f"Saved state to {save_path}")
 
@@ -1403,6 +1637,7 @@ def main(args):
                             vae=vae,
                             unet=accelerator.unwrap_model(unet),
                             controlnet=accelerator.unwrap_model(controlnet),
+                            adapter=accelerator.unwrap_model(token_image_adapter),
                             args=args,
                             accelerator=accelerator,
                             weight_dtype=weight_dtype,
@@ -1427,6 +1662,7 @@ def main(args):
         save_models(
             accelerator.unwrap_model(unet),
             accelerator.unwrap_model(controlnet),
+            accelerator.unwrap_model(token_image_adapter),
             save_path,
             args,
             orig_unet_sd if args.save_weights_increaments else None,
@@ -1440,6 +1676,7 @@ def main(args):
                 vae=vae,
                 unet=accelerator.unwrap_model(unet),
                 controlnet=accelerator.unwrap_model(controlnet),
+                adapter=accelerator.unwrap_model(token_image_adapter),
                 args=args,
                 accelerator=accelerator,
                 weight_dtype=weight_dtype,
