@@ -1,0 +1,23 @@
+accelerate launch train_controlnext_no_ca.py --pretrained_model_name_or_path "stabilityai/stable-diffusion-xl-base-1.0" \
+--pretrained_vae_model_name_or_path "madebyollin/sdxl-vae-fp16-fix" \
+--variant fp16 \
+--use_safetensors \
+--output_dir "train/sticker_model" \
+--logging_dir "logs" \
+--resolution 768 \
+--gradient_checkpointing \
+--set_grads_to_none \
+--proportion_empty_prompts 0.0 \
+--controlnet_scale_factor 1.0 \
+--mixed_precision fp16 \
+--enable_xformers_memory_efficient_attention \
+--train_data_dir "/workspace/data/changhyun/dataset/character_emoticon_data" \
+--image_column "cropped_sticker" \
+--conditioning_image_column "sketch" \
+--caption_column "sticker_image" \
+--validation_prompt "a sticker of character" \
+--validation_image "examples/sticker/condition_sketch.png" \
+--batch_size 4 \
+--max_train_steps 20000 \
+--checkpointing_steps 1000 \
+--validation_steps 1000

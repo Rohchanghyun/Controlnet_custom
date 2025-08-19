@@ -1,0 +1,20 @@
+accelerate launch train_controlnext_sketch.py --pretrained_model_name_or_path "stabilityai/stable-diffusion-xl-base-1.0" \
+--pretrained_vae_model_name_or_path "madebyollin/sdxl-vae-fp16-fix" \
+--variant fp16 \
+--use_safetensors \
+--output_dir /workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/train/examples/plain_sticker \
+--logging_dir "logs" \
+--resolution 1024 \
+--gradient_checkpointing \
+--set_grads_to_none \
+--proportion_empty_prompts 0.2 \
+--controlnet_scale_factor 1.0 \
+--validation_steps 100 \
+--mixed_precision fp16 \
+--enable_xformers_memory_efficient_attention \
+--validation_image /workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/examples/plain_sticker/condition_0.png \
+--validation_prompt "a sticker image of a character" \
+--sticker_image_dir /workspace/data/changhyun/dataset/pose_attention/text_removed_sticker \
+--sketch_image_dir /workspace/data/changhyun/dataset/pose_attention/sticker_sketch \
+--visual_token_dir /workspace/data/changhyun/dataset/pose_attention/visual_tokens \
+--validation_visual_token "/workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/examples/visual_token_no_ca/condition_0.pt" \

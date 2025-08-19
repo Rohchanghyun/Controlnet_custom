@@ -1,0 +1,13 @@
+python run_controlnext.py --pretrained_model_name_or_path "neta-art/neta-xl-2.0" \
+    --unet_model_name_or_path "examples/visual_token_no_ca/checkpoints/checkpoint-2500/" \
+    --controlnet_model_name_or_path "examples/visual_token_no_ca/checkpoints/checkpoint-2500/"  \
+    --controlnet_scale 1.0 \
+    --vae_model_name_or_path "madebyollin/sdxl-vae-fp16-fix" \
+    --validation_prompt "a sticker image of a character laughing" \
+    --negative_prompt "worst quality, abstract, clumsy pose, deformed hand, fused fingers, extra digits, fewer digits, fewer fingers, extra fingers, extra arm, missing arm, extra leg, missing leg, signature, artist name, multi views, disfigured, ugly" \
+    --validation_image "examples/visual_token_no_ca/11300.png" \
+    --validation_visual_token "examples/visual_token_no_ca/11300.pt" \
+    --output_dir "examples/visual_token_no_ca/inference" \
+    --load_weight_increasement \
+    --use_safetensors \
+    --variant fp16

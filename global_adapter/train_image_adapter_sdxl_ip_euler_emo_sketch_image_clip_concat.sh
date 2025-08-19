@@ -1,0 +1,20 @@
+CUDA_VISIBLE_DEVICES=2 python global_feature_train_ip_euler_drop_sdxl_image_clip.py \
+--mode train \
+--data_path /workspace/data/changhyun/dataset/emo_sketch \
+--extractor_weight /workspace/data/changhyun/output/global_adapter/256/extractor/model_2000.pt \
+--output_dir /workspace/data/changhyun/output/SDXL_image_clip_3MLP_4_filter_1e_6 \
+--clip_embeddings_dim 4 \
+--model_id "neta-art/neta-xl-2.0" \
+--batchid 1 \
+--batchimage 2 \
+--epoch 5 \
+--lr 1e-6 \
+--vae_model_path "madebyollin/sdxl-vae-fp16-fix" \
+--validation_image_path "/workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/total_model/examples/emo_sketch/original.png" \
+--validation_caption "animation, bear-like character, happy, waving hand, front view close-up, sticker style, white background" \
+--validation_num_samples 3 \
+--guidance_scale_1 3 \
+--guidance_scale_2 7.5 \
+--inference_height 768 \
+--inference_width 768 \
+--num_inference_steps 50 

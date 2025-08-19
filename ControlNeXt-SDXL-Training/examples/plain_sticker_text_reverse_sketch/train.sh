@@ -1,0 +1,20 @@
+accelerate launch train_controlnext_sketch_text.py --pretrained_model_name_or_path "neta-art/neta-xl-2.0" \
+--pretrained_vae_model_name_or_path "stabilityai/sdxl-vae" \
+--use_safetensors \
+--output_dir /workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/train/examples/plain_sticker_text_reverse_sketch \
+--train_batch_size 4 \
+--logging_dir "logs" \
+--resolution 1024 \
+--gradient_checkpointing \
+--set_grads_to_none \
+--proportion_empty_prompts 0.2 \
+--controlnet_scale_factor 1.0 \
+--validation_steps 100 \
+--enable_xformers_memory_efficient_attention \
+--validation_image /workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/examples/plain_sticker_text_reverse_sketch/condition_0.png \
+--validation_prompt "a sticker image of a character laughing" \
+--sticker_image_dir /workspace/data/changhyun/dataset/pose_attention/text_removed_sticker \
+--sketch_image_dir /workspace/data/changhyun/dataset/pose_attention/sticker_sketch \
+--visual_token_dir /workspace/data/changhyun/dataset/pose_attention/visual_tokens \
+--validation_visual_token "/workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/examples/visual_token_no_ca/condition_0.pt" \
+--caption_json_path /workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/caption_generation/captions/text_removed_sticker_captions_color.json \

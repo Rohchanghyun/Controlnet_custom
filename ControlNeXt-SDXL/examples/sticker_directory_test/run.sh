@@ -1,0 +1,12 @@
+python run_controlnext.py  --pretrained_model_name_or_path "neta-art/neta-xl-2.0" \
+    --unet_model_name_or_path "/workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/train/examples/sticker_directory_test/checkpoints/checkpoint-21000" \
+    --controlnet_model_name_or_path "/workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/ControlNeXt-SDXL-Training/train/examples/sticker_directory_test/checkpoints/checkpoint-21000" \
+    --controlnet_scale 1.0 \
+    --vae_model_name_or_path "Eugeoter/sdxl-vae-anime-alpha-67500" \
+    --validation_prompt "a diamond tower in the middle of a lava lake" \
+    --validation_image "examples/sticker_directory_test/condition_0.png" \
+    --output_dir "examples/sticker_directory_test" \
+    --width 1024 \
+    --height 1024 \
+    --load_weight_increasement \
+    --variant fp32

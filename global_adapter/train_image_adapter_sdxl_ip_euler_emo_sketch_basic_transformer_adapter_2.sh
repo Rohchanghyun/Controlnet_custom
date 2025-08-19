@@ -1,0 +1,20 @@
+CUDA_VISIBLE_DEVICES=1 python global_feature_train_ip_euler_drop_sdxl_basic_transformer_adapter_2.py \
+--mode train \
+--data_path /workspace/data/changhyun/dataset/emo_sketch \
+--extractor_weight /workspace/data/changhyun/output/global_adapter/256/extractor/model_2000.pt \
+--output_dir /workspace/data/changhyun/output/emo_sketch_basic_transformer_adapter_4_encode_func \
+--clip_embeddings_dim 4 \
+--model_id "stabilityai/stable-diffusion-xl-base-1.0" \
+--batchid 1 \
+--batchimage 2 \
+--epoch 5 \
+--lr 2e-5 \
+--vae_model_path "madebyollin/sdxl-vae-fp16-fix" \
+--validation_image_path "/workspace/data/changhyun/projects/emoji_generation/Controlnet_custom/total_model/examples/emo_sketch/original.png" \
+--validation_caption "animation, bear-like character, happy, waving hand, front view close-up, sticker style, white background" \
+--validation_num_samples 3 \
+--guidance_scale_1 3 \
+--guidance_scale_2 7.5 \
+--inference_height 1024 \
+--inference_width 1024 \
+--num_inference_steps 50 
